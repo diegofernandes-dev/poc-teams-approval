@@ -442,6 +442,8 @@ The completed event will later be used to update/remove Adaptive Card actions wh
 
 Azure infrastructure foundation for the Approval Gateway is provisioned, validated, adopted by Bicep, and post-adoption checks are complete.
 
+Application slice 1 (Bot messaging gateway) is implemented in code and validated locally with `dotnet build` / `dotnet test`. It is **not yet deployed** to `func-ado-teams-poc-diegolab`.
+
 Validated:
 
 - Function App deployment completed;
@@ -454,12 +456,30 @@ Validated:
 - deployment container Storage Blob Data Contributor assignment exists and is unchanged;
 - Application Insights Monitoring Metrics Publisher assignment exists and is unchanged;
 - Bicep adoption deployment completed successfully;
-- post-adoption `what-if` shows no create/delete operations.
+- post-adoption `what-if` shows no create/delete operations;
+- `ApprovalGateway.slnx` builds and tests pass locally;
+- `POST /api/messages` and `GET /api/health` implemented using Microsoft 365 Agents SDK on .NET 10 isolated worker.
 
-## 18. Next checkpoint
+## 18. Application slice 1 — Bot messaging gateway
 
-Proceed to Azure Bot / Teams personal application setup.
+Implemented the minimum Azure Functions application to receive Bot Framework activities.
 
-The immediate goal is to establish the Bot/Teams identity and validate the path required for a proactive personal message to the test approver before introducing Azure DevOps approval events.
+Scope delivered:
+
+- `src/ApprovalGateway/` — .NET 10 isolated worker, Flex Consumption compatible (no `FUNCTIONS_WORKER_RUNTIME` in deployable config);
+- `POST /api/messages` — delegates to `IAgentHttpAdapter` / `ApprovalGatewayAgent`;
+- `GET /api/health` — returns `{ "status": "ok" }`;
+- structured logging of activity metadata (type, id, conversation, channel; no secrets or full payloads);
+- JWT validation for Bot messages via Agents SDK auth pattern;
+- configuration bridge: `MicrosoftAppId`, `MicrosoftAppTenantId`, `MicrosoftAppPassword`;
+- unit tests in `tests/ApprovalGateway.Tests/`.
+
+Explicitly not implemented: Azure DevOps, Adaptive Cards, proactive messaging, persistence, CI/CD, Bicep changes.
+
+## 19. Next checkpoint
+
+Deploy the function package to `func-ado-teams-poc-diegolab`, configure Function App settings and the Azure Bot messaging endpoint, then validate round-trip connectivity via Web Chat or Teams.
+
+After Bot connectivity is confirmed, proceed to proactive Teams messaging and Azure DevOps Service Hook integration in subsequent slices.
 
 The walkthrough must continue one validated checkpoint at a time.
