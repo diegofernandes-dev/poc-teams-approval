@@ -76,10 +76,11 @@ az account set --subscription "Azure subscription 1"
 Run from the repository root:
 
 ```bash
-az bicep build --file infra/main.bicep
+mkdir -p build/infra
+az bicep build --file infra/main.bicep --outfile build/infra/main.json
 ```
 
-This must succeed before any Azure operation.
+Generated ARM JSON belongs under `build/` (gitignored), never beside `infra/main.bicep`. This must succeed before any Azure operation.
 
 ## What-if
 

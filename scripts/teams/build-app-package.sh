@@ -1,17 +1,26 @@
 #!/usr/bin/env bash
 # Build the Microsoft Teams app package ZIP (manifest + icons at archive root).
 # No network calls, credentials, or Azure/Teams side effects.
+# Never modifies timestamps or metadata of tracked source files under teams/appPackage/.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SRC="${ROOT}/teams/appPackage"
 OUT_DIR="${ROOT}/build/teams"
 OUT_ZIP="${OUT_DIR}/ApprovalGateway.zip"
+STAGING=""
 
 fail() {
   echo "error: $*" >&2
   exit 1
 }
+
+cleanup() {
+  if [[ -n "${STAGING}" && -d "${STAGING}" ]]; then
+    rm -rf "${STAGING}"
+  fi
+}
+trap cleanup EXIT
 
 command -v zip >/dev/null 2>&1 || fail "zip is required"
 command -v python3 >/dev/null 2>&1 || fail "python3 is required"
@@ -51,11 +60,14 @@ PY
 mkdir -p "${OUT_DIR}"
 rm -f "${OUT_ZIP}"
 
+# Stage copies only; normalize timestamps on staging, never on tracked sources.
+STAGING="$(mktemp -d "${TMPDIR:-/tmp}/teams-app-package.XXXXXX")"
+cp "${SRC}/manifest.json" "${SRC}/color.png" "${SRC}/outline.png" "${STAGING}/"
+
 # Deterministic archive: fixed timestamps, sorted members, no extra attributes.
 # Files must appear at ZIP root (no teams/appPackage/ prefix).
 (
-  cd "${SRC}"
-  # Use UTC epoch for reproducible entry times when zip supports -X/-o.
+  cd "${STAGING}"
   export TZ=UTC
   touch -t 202001010000 manifest.json color.png outline.png
   zip -X -q "${OUT_ZIP}" manifest.json color.png outline.png
