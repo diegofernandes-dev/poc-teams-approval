@@ -1,6 +1,5 @@
 using ApprovalGateway.Configuration;
 using Microsoft.Agents.Hosting.AspNetCore;
-using Microsoft.Agents.Storage;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.Configuration;
@@ -25,7 +24,6 @@ builder.Services
 builder.Services.AddHttpClient();
 builder.AddAgentApplicationOptions();
 builder.AddAgent<ApprovalGateway.Bot.ApprovalGatewayAgent>();
-builder.Services.AddSingleton<IStorage, MemoryStorage>();
 builder.Services.AddAgentAspNetAuthentication(builder.Configuration);
 
 builder.UseMiddleware<ApprovalGateway.Functions.BotAuthenticationMiddleware>();
@@ -38,9 +36,12 @@ var tenantId = builder.Configuration[BotConfiguration.MicrosoftAppTenantIdKey]
 var host = builder.Build();
 
 var startupLogger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("ApprovalGateway.Startup");
-startupLogger.LogInformation(
-    "Approval Gateway starting. MicrosoftAppId={MicrosoftAppId} MicrosoftAppTenantId={MicrosoftAppTenantId}",
-    appId,
-    tenantId);
+if (startupLogger.IsEnabled(LogLevel.Information))
+{
+    startupLogger.LogInformation(
+        "Approval Gateway starting. MicrosoftAppId={MicrosoftAppId} MicrosoftAppTenantId={MicrosoftAppTenantId}",
+        appId,
+        tenantId);
+}
 
 host.Run();

@@ -1,6 +1,13 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 // Adapted from https://github.com/microsoft/Agents/blob/main/samples/dotnet/quickstart/AspNetExtensions.cs
+//
+// Why this file exists:
+// Microsoft.Agents.Hosting.AspNetCore 1.6.150 (and later 1.7.x) does not ship
+// AddAgentAspNetAuthentication. Inbound JWT validation for Azure Bot Service
+// traffic remains sample-owned application code. This copy is trimmed to the
+// Azure Public Cloud + SingleTenant Bot deployment used by this POC; see the
+// removal notes below the class for each omitted branch.
 
 using System.Collections.Concurrent;
 using System.Globalization;
@@ -22,6 +29,10 @@ public static class AspNetExtensions
 {
     private static readonly ConcurrentDictionary<string, ConfigurationManager<OpenIdConnectConfiguration>> OpenIdMetadataCache = new();
 
+    /// <summary>
+    /// Adds JWT bearer validation for Azure Bot Service and Entra-issued agent tokens
+    /// on Azure Public Cloud.
+    /// </summary>
     public static void AddAgentAspNetAuthentication(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -54,68 +65,33 @@ public static class AspNetExtensions
             }
         }
 
-        if (validationOptions.ValidIssuers == null || validationOptions.ValidIssuers.Count == 0)
+        // Public-cloud ABS inbound issuers. Matches the official quickstart defaults when
+        // IsGov=false and AzureBotServiceOnly=false:
+        // - Bot Framework ABS issuer (classic ABS tokens)
+        // - Microsoft Bot Service Entra tenants (ABS channel tokens migrating to Entra)
+        // - Tenant-specific issuers when TenantId is configured (SingleTenant bot)
+        var validIssuers = new List<string>
         {
-            if (validationOptions.AzureBotServiceOnly)
-            {
-                validationOptions.ValidIssuers =
-                [
-                    validationOptions.IsGov
-                        ? AuthenticationConstants.GovBotFrameworkTokenIssuer
-                        : AuthenticationConstants.BotFrameworkTokenIssuer
-                ];
-            }
-            else if (validationOptions.IsGov)
-            {
-                validationOptions.ValidIssuers =
-                [
-                    AuthenticationConstants.GovBotFrameworkTokenIssuer,
-                    "https://sts.windows.net/cab8a31a-1906-4287-a0d8-4eef66b95f6e/",
-                    "https://login.microsoftonline.us/cab8a31a-1906-4287-a0d8-4eef66b95f6e/v2.0"
-                ];
+            AuthenticationConstants.BotFrameworkTokenIssuer,
+            "https://sts.windows.net/d6d49420-f39b-4df7-a1dc-d59a935871db/",
+            "https://login.microsoftonline.com/d6d49420-f39b-4df7-a1dc-d59a935871db/v2.0",
+            "https://sts.windows.net/f8cdef31-a31e-4b4a-93e4-5f571e91255a/",
+            "https://login.microsoftonline.com/f8cdef31-a31e-4b4a-93e4-5f571e91255a/v2.0",
+            "https://sts.windows.net/69e9b82d-4842-4902-8d1e-abc5b98a55e8/",
+            "https://login.microsoftonline.com/69e9b82d-4842-4902-8d1e-abc5b98a55e8/v2.0",
+        };
 
-                if (!string.IsNullOrEmpty(validationOptions.TenantId) && Guid.TryParse(validationOptions.TenantId, out _))
-                {
-                    validationOptions.ValidIssuers.Add(string.Format(CultureInfo.InvariantCulture, AuthenticationConstants.ValidTokenIssuerUrlTemplateV1, validationOptions.TenantId));
-                    validationOptions.ValidIssuers.Add(string.Format(CultureInfo.InvariantCulture, AuthenticationConstants.ValidGovernmentTokenIssuerUrlTemplateV2, validationOptions.TenantId));
-                }
-            }
-            else
-            {
-                validationOptions.ValidIssuers =
-                [
-                    AuthenticationConstants.BotFrameworkTokenIssuer,
-                    "https://sts.windows.net/d6d49420-f39b-4df7-a1dc-d59a935871db/",
-                    "https://login.microsoftonline.com/d6d49420-f39b-4df7-a1dc-d59a935871db/v2.0",
-                    "https://sts.windows.net/f8cdef31-a31e-4b4a-93e4-5f571e91255a/",
-                    "https://login.microsoftonline.com/f8cdef31-a31e-4b4a-93e4-5f571e91255a/v2.0",
-                    "https://sts.windows.net/69e9b82d-4842-4902-8d1e-abc5b98a55e8/",
-                    "https://login.microsoftonline.com/69e9b82d-4842-4902-8d1e-abc5b98a55e8/v2.0",
-                ];
-
-                if (!string.IsNullOrEmpty(validationOptions.TenantId) && Guid.TryParse(validationOptions.TenantId, out _))
-                {
-                    validationOptions.ValidIssuers.Add(string.Format(CultureInfo.InvariantCulture, AuthenticationConstants.ValidTokenIssuerUrlTemplateV1, validationOptions.TenantId));
-                    validationOptions.ValidIssuers.Add(string.Format(CultureInfo.InvariantCulture, AuthenticationConstants.ValidTokenIssuerUrlTemplateV2, validationOptions.TenantId));
-                }
-            }
+        if (!string.IsNullOrEmpty(validationOptions.TenantId) && Guid.TryParse(validationOptions.TenantId, out _))
+        {
+            validIssuers.Add(string.Format(CultureInfo.InvariantCulture, AuthenticationConstants.ValidTokenIssuerUrlTemplateV1, validationOptions.TenantId));
+            validIssuers.Add(string.Format(CultureInfo.InvariantCulture, AuthenticationConstants.ValidTokenIssuerUrlTemplateV2, validationOptions.TenantId));
         }
 
-        if (string.IsNullOrEmpty(validationOptions.AzureBotServiceOpenIdMetadataUrl))
-        {
-            validationOptions.AzureBotServiceOpenIdMetadataUrl = validationOptions.IsGov
-                ? AuthenticationConstants.GovAzureBotServiceOpenIdMetadataUrl
-                : AuthenticationConstants.PublicAzureBotServiceOpenIdMetadataUrl;
-        }
-
-        if (string.IsNullOrEmpty(validationOptions.OpenIdMetadataUrl))
-        {
-            validationOptions.OpenIdMetadataUrl = validationOptions.IsGov
-                ? AuthenticationConstants.GovOpenIdMetadataUrl
-                : AuthenticationConstants.PublicOpenIdMetadataUrl;
-        }
-
-        var openIdMetadataRefresh = validationOptions.OpenIdMetadataRefresh ?? BaseConfigurationManager.DefaultAutomaticRefreshInterval;
+        // Hardcoded to Public Cloud defaults (equivalent to sample when IsGov=false and
+        // AzureBotServiceOpenIdMetadataUrl / OpenIdMetadataUrl are unset).
+        const string azureBotServiceOpenIdMetadataUrl = AuthenticationConstants.PublicAzureBotServiceOpenIdMetadataUrl;
+        const string openIdMetadataUrl = AuthenticationConstants.PublicOpenIdMetadataUrl;
+        var openIdMetadataRefresh = BaseConfigurationManager.DefaultAutomaticRefreshInterval;
 
         _ = services.AddAuthentication(options =>
             {
@@ -131,7 +107,7 @@ public static class AspNetExtensions
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromMinutes(5),
-                    ValidIssuers = validationOptions.ValidIssuers,
+                    ValidIssuers = validIssuers,
                     ValidAudiences = validationOptions.Audiences,
                     ValidateIssuerSigningKey = true,
                     RequireSignedTokens = true,
@@ -141,6 +117,8 @@ public static class AspNetExtensions
 
                 options.Events = new JwtBearerEvents
                 {
+                    // ABS tokens and Entra tokens use different OpenID metadata endpoints.
+                    // AzureBotServiceTokenHandling remains enabled (sample default = true).
                     OnMessageReceived = context =>
                     {
                         var authorizationHeader = context.Request.Headers.Authorization.ToString();
@@ -162,12 +140,12 @@ public static class AspNetExtensions
                         var token = new JsonWebToken(parts[1]);
                         var issuer = token.Issuer;
 
-                        if (validationOptions.AzureBotServiceTokenHandling && IsBotFrameworkIssuer(issuer))
+                        if (IsBotFrameworkIssuer(issuer))
                         {
                             context.Options.TokenValidationParameters.ConfigurationManager = OpenIdMetadataCache.GetOrAdd(
-                                validationOptions.AzureBotServiceOpenIdMetadataUrl,
+                                azureBotServiceOpenIdMetadataUrl,
                                 _ => new ConfigurationManager<OpenIdConnectConfiguration>(
-                                    validationOptions.AzureBotServiceOpenIdMetadataUrl,
+                                    azureBotServiceOpenIdMetadataUrl,
                                     new OpenIdConnectConfigurationRetriever(),
                                     new HttpClient())
                                 {
@@ -177,38 +155,14 @@ public static class AspNetExtensions
                         else
                         {
                             context.Options.TokenValidationParameters.ConfigurationManager = OpenIdMetadataCache.GetOrAdd(
-                                validationOptions.OpenIdMetadataUrl,
+                                openIdMetadataUrl,
                                 _ => new ConfigurationManager<OpenIdConnectConfiguration>(
-                                    validationOptions.OpenIdMetadataUrl,
+                                    openIdMetadataUrl,
                                     new OpenIdConnectConfigurationRetriever(),
                                     new HttpClient())
                                 {
                                     AutomaticRefreshInterval = openIdMetadataRefresh
                                 });
-                        }
-
-                        return Task.CompletedTask;
-                    },
-                    OnTokenValidated = context =>
-                    {
-                        var issuer = context.Principal?.FindFirst("iss")?.Value;
-                        var isBotFrameworkToken = validationOptions.AzureBotServiceTokenHandling
-                            && issuer != null
-                            && IsBotFrameworkIssuer(issuer);
-
-                        if (!isBotFrameworkToken
-                            && validationOptions.AllowedCallers != null
-                            && validationOptions.AllowedCallers.Count > 0
-                            && !validationOptions.AllowedCallers.Any(c => c.Equals("*", StringComparison.Ordinal)))
-                        {
-                            var callerAppId = context.Principal?.FindFirst("azp")?.Value
-                                ?? context.Principal?.FindFirst("appid")?.Value;
-
-                            if (string.IsNullOrEmpty(callerAppId)
-                                || !validationOptions.AllowedCallers.Any(c => c.Equals(callerAppId, StringComparison.OrdinalIgnoreCase)))
-                            {
-                                context.Fail($"Caller App ID '{callerAppId}' is not in the AllowedCallers list.");
-                            }
                         }
 
                         return Task.CompletedTask;
@@ -219,31 +173,53 @@ public static class AspNetExtensions
 
     private static bool IsBotFrameworkIssuer(string issuer)
     {
-        return AuthenticationConstants.BotFrameworkTokenIssuer.Equals(issuer, StringComparison.OrdinalIgnoreCase)
-            || AuthenticationConstants.GovBotFrameworkTokenIssuer.Equals(issuer, StringComparison.OrdinalIgnoreCase)
-            || AuthenticationConstants.ChinaBotFrameworkTokenIssuer.Equals(issuer, StringComparison.OrdinalIgnoreCase);
+        // Public Cloud ABS issuer only. Gov/China ABS issuers are unreachable for this
+        // East US 2 / Azure Public deployment and are not in ValidIssuers.
+        return AuthenticationConstants.BotFrameworkTokenIssuer.Equals(issuer, StringComparison.OrdinalIgnoreCase);
     }
 
     public sealed class TokenValidationOptions
     {
+        /// <summary>
+        /// Bot Microsoft App ID(s). Must contain at least one GUID audience.
+        /// </summary>
         public IList<string>? Audiences { get; set; }
 
+        /// <summary>
+        /// Entra tenant ID of the SingleTenant bot. When set, tenant-specific v1/v2 issuers are accepted.
+        /// </summary>
         public string? TenantId { get; set; }
-
-        public IList<string>? ValidIssuers { get; set; }
-
-        public bool IsGov { get; set; }
-
-        public bool AzureBotServiceOnly { get; set; }
-
-        public string? AzureBotServiceOpenIdMetadataUrl { get; set; }
-
-        public string? OpenIdMetadataUrl { get; set; }
-
-        public bool AzureBotServiceTokenHandling { get; set; } = true;
-
-        public TimeSpan? OpenIdMetadataRefresh { get; set; }
-
-        public IList<string>? AllowedCallers { get; set; }
     }
 }
+
+// Removal notes (relative to the official quickstart AspNetExtensions.cs):
+//
+// IsGov / Gov ValidIssuers / Gov metadata URLs:
+//   Unreachable. This POC runs in Azure Public (East US 2). Government cloud
+//   issuers and metadata endpoints are never presented by Azure Bot Service here.
+//
+// China Bot Framework issuer handling:
+//   Unreachable. China (Gallatin) ABS issuer is not in the Public ValidIssuers list
+//   and this deployment is not on China cloud.
+//
+// AzureBotServiceOnly:
+//   Intentionally not enabled. Official sample default is false. Enabling it would
+//   accept only the classic Bot Framework issuer and reject Entra-issued ABS channel
+//   tokens from the Microsoft Bot Service tenants listed above.
+//
+// AllowedCallers + OnTokenValidated:
+//   Not configured for this POC (no agent-to-agent callers). With an empty/absent
+//   AllowedCallers list the original handler is a no-op for ABS traffic.
+//
+// Configurable AzureBotServiceOpenIdMetadataUrl / OpenIdMetadataUrl / OpenIdMetadataRefresh:
+//   Never set in this POC. Hardcoded Public Cloud defaults are identical to the
+//   sample's IsGov=false fallback path.
+//
+// Configurable AzureBotServiceTokenHandling:
+//   Sample default is true and is required so ABS tokens resolve signing keys from
+//   login.botframework.com. Hardcoded enabled to preserve that semantics without a
+//   config switch that could disable ABS metadata handling.
+//
+// Configurable ValidIssuers override:
+//   Never set in this POC. Public-cloud defaults above match the sample when
+//   ValidIssuers is omitted.

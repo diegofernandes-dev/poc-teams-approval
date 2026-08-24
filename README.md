@@ -203,9 +203,26 @@ After deploying the function package to `func-ado-teams-poc-diegolab`:
 
 4. Use **Test in Web Chat** or Teams to send a message; expect reply: `Approval Gateway POC is online.`
 
-### Auth note (managed identity tradeoff)
+### Authentication model (slice 1)
 
-The Function App system-assigned managed identity is separate from the Bot App Registration identity. This slice uses **client secret** auth (`MicrosoftAppPassword`) for outbound Bot Framework calls. Secretless auth via user-assigned managed identity requires reconfiguring the Azure Bot resource and is deferred to a future infrastructure slice.
+**Inbound (`POST /api/messages`):**
+
+- Trigger uses `AuthorizationLevel.Anonymous` (Bot Framework does not send Function Keys).
+- JWT validation is performed by `BotAuthenticationMiddleware` using ASP.NET Core JwtBearer configured in `Configuration/AspNetExtensions.cs`.
+- That helper is adapted from the [official Agents SDK quickstart](https://github.com/microsoft/Agents/blob/main/samples/dotnet/quickstart/AspNetExtensions.cs). `Microsoft.Agents.Hosting.AspNetCore` 1.6.150 does **not** ship an equivalent registration API; the package README mentions `AddAgentAspNetAuthentication`, but no assembly in 1.6.x/1.7.x exports it.
+- The helper is trimmed to Azure Public Cloud + this SingleTenant bot. Public-cloud ABS issuers, Microsoft Bot Service Entra tenant issuers, tenant-specific issuers, ABS vs Entra OpenID metadata switching, audience/lifetime/signing-key validation, and `RequireSignedTokens` are preserved. Gov/China branches, `AzureBotServiceOnly`, and `AllowedCallers` are omitted because they are unused by this deployment.
+
+**Outbound (Bot Framework Connector replies):**
+
+- Uses the Agents SDK MSAL provider (`Microsoft.Agents.Authentication.Msal`) with `Connections:ServiceConnection` / `AuthType: ClientSecret`.
+- Operator-facing settings remain `MicrosoftAppId`, `MicrosoftAppTenantId`, and `MicrosoftAppPassword`. `BotConfiguration` maps those into the SDK `Connections` and `TokenValidation` keys.
+- **`MicrosoftAppPassword` is required** for this POC. It is the smallest supported option that works with the current SingleTenant Azure Bot App Registration without changing Azure Bot identity mode.
+- The Function App **system-assigned managed identity is not the Bot identity**. They are separate principals. `AuthType: SystemManagedIdentity` / `UserManagedIdentity` would only work if the Azure Bot were reconfigured to use that managed identity as its Microsoft App ID — that Azure redesign is intentionally deferred.
+- Preferred future secretless path (not implemented): keep the same SingleTenant bot app ID and use `AuthType: FederatedCredentials` with a user-assigned managed identity plus an Entra federated credential. That still requires Azure/Entra changes outside this slice.
+
+**Storage:**
+
+- This slice does **not** register `IStorage` / `MemoryStorage`. `AgentApplicationOptions` falls back to a per-turn `MemoryStorage` when no `IStorage` is in DI. Register persisted storage later when conversation or approval state is introduced.
 
 ### Not implemented in slice 1
 
@@ -213,7 +230,7 @@ The Function App system-assigned managed identity is separate from the Bot App R
 - approval-pending / approval-completed handling
 - Adaptive Cards, Approve/Reject actions
 - proactive Teams messages
-- conversation persistence (uses in-memory storage only)
+- conversation persistence / durable agent state
 - Cosmos DB, Table Storage, queues, Durable Functions
 - Graph API, approver lookup, Key Vault, APIM
 - Teams app manifest / installation

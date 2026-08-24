@@ -470,8 +470,10 @@ Scope delivered:
 - `POST /api/messages` — delegates to `IAgentHttpAdapter` / `ApprovalGatewayAgent`;
 - `GET /api/health` — returns `{ "status": "ok" }`;
 - structured logging of activity metadata (type, id, conversation, channel; no secrets or full payloads);
-- JWT validation for Bot messages via Agents SDK auth pattern;
+- inbound JWT validation via sample-owned `AspNetExtensions` (Public Cloud ABS semantics) + `BotAuthenticationMiddleware`;
+- outbound Connector auth via `Microsoft.Agents.Authentication.Msal` (`AuthType: ClientSecret`);
 - configuration bridge: `MicrosoftAppId`, `MicrosoftAppTenantId`, `MicrosoftAppPassword`;
+- no explicit `MemoryStorage` registration (SDK per-turn fallback until state is needed);
 - unit tests in `tests/ApprovalGateway.Tests/`.
 
 Explicitly not implemented: Azure DevOps, Adaptive Cards, proactive messaging, persistence, CI/CD, Bicep changes.

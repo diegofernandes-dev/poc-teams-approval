@@ -16,8 +16,8 @@
     <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.23.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="2.50.0" />
     <PackageReference Include="Microsoft.Agents.Hosting.AspNetCore" Version="1.6.150" />
-    <PackageReference Include="Microsoft.Agents.Storage" Version="1.6.150" />
     <PackageReference Include="Microsoft.Agents.Authentication" Version="1.6.150" />
+    <PackageReference Include="Microsoft.Agents.Authentication.Msal" Version="1.6.150" />
   </ItemGroup>
 
   <ItemGroup>
