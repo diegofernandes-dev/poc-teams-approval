@@ -55,7 +55,7 @@ Reason for `East US 2`: the POC has no Brazilian data-residency or latency requi
 
 ## 4. Azure Function App — creation configuration
 
-The Function App will act as the Approval Gateway between Azure DevOps and Microsoft Teams.
+The Function App acts as the Approval Gateway between Azure DevOps and Microsoft Teams.
 
 ### Hosting
 
@@ -75,15 +75,16 @@ Configured:
 - Function App name: `func-ado-teams-poc-diegolab`
 - Region: `East US 2`
 - Runtime stack: `.NET`
-- Version: `.NET 10 (Isolated)`
+- Version: `.NET 10 (LTS), isolated worker model`
 - Instance size: `512 MB`
 - Zone redundancy: disabled
+- Secure unique default hostname: enabled
 
 The 512 MB size is intentional for the initial low-volume webhook/callback workload. It can be increased if runtime pressure appears.
 
 ## 5. Function Storage
 
-The Function creation wizard proposed a new Storage Account:
+The Function creation wizard created the Storage Account:
 
 ```text
 rgadoteamspoc9a37
@@ -100,6 +101,12 @@ Configure later
 Reason: Storage diagnostics are not required to prove the approval flow, and enabling extra telemetry would add cost/noise.
 
 Azure DevOps remains the approval-state authority. Any application storage introduced later is only technical/correlation state.
+
+The Flex Consumption deployment package container was also created inside this account:
+
+```text
+app-package-func-ado-teams-poc-diegolab-1f4bef4
+```
 
 ## 6. Azure OpenAI
 
@@ -155,7 +162,13 @@ Configured:
 Enable Application Insights: Yes
 ```
 
-New resource proposed in:
+Created:
+
+```text
+func-ado-teams-poc-diegolab
+```
+
+Region:
 
 ```text
 East US 2
@@ -179,7 +192,111 @@ Create a Durable Task Scheduler resource: Disabled
 
 Reason: the initial workflow is event-driven and does not require durable orchestration, fan-out/fan-in, or long-running workflow state.
 
-## 10. Architecture constraints to preserve
+## 10. Deployment settings
+
+Configured:
+
+```text
+Continuous deployment: Disabled
+Basic authentication: Disabled
+```
+
+Decision: do not introduce GitHub Actions until the gateway code exists and the functional flow has been proven. Basic authentication is intentionally disabled; future automated deployment should prefer federated identity/OIDC rather than deployment credentials.
+
+## 11. Resource authentication and Managed Identity
+
+The Function App was configured to use identity-based access rather than secrets wherever the wizard supported it.
+
+Selected authentication:
+
+```text
+Host storage: Managed identity
+Deployment storage: Managed identity
+Application Insights: Managed identity
+Managed identity type: System-assigned
+```
+
+Expected and validated RBAC:
+
+### Host Storage
+
+Function managed identity:
+
+```text
+func-ado-teams-poc-diegolab
+```
+
+Role:
+
+```text
+Storage Blob Data Owner
+```
+
+Scope:
+
+```text
+Storage account rgadoteamspoc9a37
+```
+
+### Deployment package container
+
+Role:
+
+```text
+Storage Blob Data Contributor
+```
+
+Scope:
+
+```text
+app-package-func-ado-teams-poc-diegolab-1f4bef4
+```
+
+The `Storage Blob Data Owner` assignment from the parent Storage Account is also inherited by the container.
+
+### Application Insights
+
+Role:
+
+```text
+Monitoring Metrics Publisher
+```
+
+The role assignment to the Function App system-assigned managed identity was explicitly validated after deployment.
+
+## 12. Tags
+
+Applied to the resources created by the Function wizard:
+
+```text
+project = poc-teams-approval
+environment = poc
+```
+
+## 13. Provisioned resources
+
+Deployment completed successfully.
+
+Resources confirmed in `rg-ado-teams-poc`:
+
+```text
+ASP-rgadoteamspoc-9431                App Service plan
+func-ado-teams-poc-diegolab           Function App
+func-ado-teams-poc-diegolab           Application Insights
+rgadoteamspoc9a37                      Storage account
+```
+
+All are in `East US 2`.
+
+Azure also created a separate resource group named:
+
+```text
+DefaultResourceGroup-EUS2
+```
+
+This was not manually deleted. Any `DefaultResourceGroup-*` created by Azure should be inspected for automatically managed Azure Monitor/Application Insights resources before considering cleanup.
+
+## 14. Architecture constraints to preserve
 
 The implementation must preserve these rules throughout the POC:
 
@@ -194,7 +311,7 @@ The implementation must preserve these rules throughout the POC:
 9. Only explicit production promotion should create the PRD approval and corresponding Teams notification.
 10. Service Hooks should be filtered by environment where appropriate, rather than creating one subscription per pipeline.
 
-## 11. Planned Azure DevOps events
+## 15. Planned Azure DevOps events
 
 Primary event:
 
@@ -210,8 +327,28 @@ ms.vss-pipelinechecks-events.approval-completed
 
 The completed event will later be used to update/remove Adaptive Card actions when an approval is completed directly in Azure DevOps.
 
-## 12. Next checkpoint
+## 16. Current checkpoint
 
-Continue the Function App creation wizard from the step immediately after Durable Functions.
+Azure infrastructure foundation for the Approval Gateway is provisioned and validated.
 
-Do not assume the Function App exists until deployment has been explicitly reviewed, created, and validated.
+Validated:
+
+- Function App deployment completed;
+- Flex Consumption plan exists;
+- Storage Account exists;
+- deployment package container exists;
+- Application Insights exists;
+- system-assigned Managed Identity exists;
+- Storage Blob Data Owner assignment exists;
+- deployment container Storage Blob Data Contributor assignment exists;
+- Application Insights Monitoring Metrics Publisher assignment exists.
+
+## 17. Next checkpoint
+
+Proceed to the next integration layer only after deciding the order of:
+
+1. Azure Bot / Teams application setup;
+2. gateway application skeleton and HTTP endpoints;
+3. Azure DevOps test project/environment/approval configuration.
+
+The walkthrough must continue one validated checkpoint at a time.
