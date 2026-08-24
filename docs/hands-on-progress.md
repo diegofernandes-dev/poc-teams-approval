@@ -174,6 +174,12 @@ Region:
 East US 2
 ```
 
+The resource is workspace-based and uses:
+
+```text
+/subscriptions/e979b0ce-3200-4e2c-9741-bfb368aadf25/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-e979b0ce-3200-4e2c-9741-bfb368aadf25-EUS2
+```
+
 Reason: observability is useful even in the POC because the gateway will need to diagnose:
 
 - Azure DevOps webhook delivery;
@@ -216,20 +222,26 @@ Application Insights: Managed identity
 Managed identity type: System-assigned
 ```
 
-Expected and validated RBAC:
-
-### Host Storage
-
-Function managed identity:
+Managed Identity principal ID:
 
 ```text
-func-ado-teams-poc-diegolab
+674fdcac-734f-4d83-9d09-89aecbd8931e
 ```
+
+Validated RBAC:
+
+### Host Storage
 
 Role:
 
 ```text
 Storage Blob Data Owner
+```
+
+Role assignment name:
+
+```text
+ac5dabde-0f09-58c2-b7f0-e7b5186c9961
 ```
 
 Scope:
@@ -246,13 +258,17 @@ Role:
 Storage Blob Data Contributor
 ```
 
+Role assignment name:
+
+```text
+a83330cc-1a44-5356-bc7a-ec1ed00a8eae
+```
+
 Scope:
 
 ```text
 app-package-func-ado-teams-poc-diegolab-1f4bef4
 ```
-
-The `Storage Blob Data Owner` assignment from the parent Storage Account is also inherited by the container.
 
 ### Application Insights
 
@@ -262,7 +278,11 @@ Role:
 Monitoring Metrics Publisher
 ```
 
-The role assignment to the Function App system-assigned managed identity was explicitly validated after deployment.
+Role assignment name:
+
+```text
+74d3277c-6b9f-5dbd-a6b6-7d826a724d02
+```
 
 ## 12. Tags
 
@@ -274,8 +294,6 @@ environment = poc
 ```
 
 ## 13. Provisioned resources
-
-Deployment completed successfully.
 
 Resources confirmed in `rg-ado-teams-poc`:
 
@@ -294,9 +312,80 @@ Azure also created a separate resource group named:
 DefaultResourceGroup-EUS2
 ```
 
-This was not manually deleted. Any `DefaultResourceGroup-*` created by Azure should be inspected for automatically managed Azure Monitor/Application Insights resources before considering cleanup.
+This resource group contains the default Log Analytics workspace used by the workspace-based Application Insights resource and must not be deleted while that dependency remains.
 
-## 14. Architecture constraints to preserve
+## 14. Infrastructure as Code adoption
+
+After manually validating the Azure resources, the baseline was captured in Bicep under:
+
+```text
+infra/
+  main.bicep
+  modules/platform.bicep
+  poc.bicepparam
+  README.md
+```
+
+The first `what-if` exposed differences between Portal-created resources and the initial Bicep model, including:
+
+- workspace-based Application Insights using `LogAnalytics` ingestion;
+- Portal-generated RBAC role assignment GUIDs;
+- the hidden Application Insights link tag on the Function App;
+- Flex Consumption runtime behavior.
+
+The Bicep was updated to adopt the existing state rather than create duplicate role assignments or convert Application Insights away from its workspace-based configuration.
+
+### Flex Consumption correction
+
+An initial adoption deployment failed because the template declared:
+
+```text
+FUNCTIONS_WORKER_RUNTIME
+```
+
+inside `siteConfig.appSettings`. Flex Consumption rejects this setting because the runtime is configured via:
+
+```text
+properties.functionAppConfig.runtime
+```
+
+`FUNCTIONS_WORKER_RUNTIME` and `FUNCTIONS_EXTENSION_VERSION` were removed from the Bicep app settings.
+
+### Successful adoption
+
+The adoption deployment was then executed successfully:
+
+```text
+az deployment sub create \
+  --name poc-teams-approval-iac-adopt \
+  --location eastus2 \
+  --template-file infra/main.bicep \
+  --parameters infra/poc.bicepparam
+```
+
+Result:
+
+```text
+provisioningState: Succeeded
+```
+
+Correlation ID:
+
+```text
+1b61aa55-4284-46f0-85ba-3833fb2060db
+```
+
+The deployment output confirmed the same Function Managed Identity principal ID:
+
+```text
+674fdcac-734f-4d83-9d09-89aecbd8931e
+```
+
+and the existing Storage, Application Insights, Function App, plan, deployment container, and RBAC resources were included in the deployment output.
+
+The Azure baseline is therefore now reproducible and managed through Bicep for subsequent changes.
+
+## 15. Architecture constraints to preserve
 
 The implementation must preserve these rules throughout the POC:
 
@@ -311,7 +400,7 @@ The implementation must preserve these rules throughout the POC:
 9. Only explicit production promotion should create the PRD approval and corresponding Teams notification.
 10. Service Hooks should be filtered by environment where appropriate, rather than creating one subscription per pipeline.
 
-## 15. Planned Azure DevOps events
+## 16. Planned Azure DevOps events
 
 Primary event:
 
@@ -327,9 +416,9 @@ ms.vss-pipelinechecks-events.approval-completed
 
 The completed event will later be used to update/remove Adaptive Card actions when an approval is completed directly in Azure DevOps.
 
-## 16. Current checkpoint
+## 17. Current checkpoint
 
-Azure infrastructure foundation for the Approval Gateway is provisioned and validated.
+Azure infrastructure foundation for the Approval Gateway is provisioned, validated, and adopted by Bicep.
 
 Validated:
 
@@ -337,18 +426,21 @@ Validated:
 - Flex Consumption plan exists;
 - Storage Account exists;
 - deployment package container exists;
-- Application Insights exists;
+- Application Insights exists and is workspace-based;
 - system-assigned Managed Identity exists;
 - Storage Blob Data Owner assignment exists;
 - deployment container Storage Blob Data Contributor assignment exists;
-- Application Insights Monitoring Metrics Publisher assignment exists.
+- Application Insights Monitoring Metrics Publisher assignment exists;
+- Bicep adoption deployment completed successfully.
 
-## 17. Next checkpoint
+## 18. Next checkpoint
 
-Proceed to the next integration layer only after deciding the order of:
+Perform post-adoption validation:
 
-1. Azure Bot / Teams application setup;
-2. gateway application skeleton and HTTP endpoints;
-3. Azure DevOps test project/environment/approval configuration.
+1. run `what-if` again after the successful deployment;
+2. confirm the Function App Managed Identity principal ID is unchanged;
+3. confirm the three RBAC role assignments remain present.
+
+After those checks, proceed to Azure Bot / Teams application setup.
 
 The walkthrough must continue one validated checkpoint at a time.
