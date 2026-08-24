@@ -588,8 +588,86 @@ Validated locally:
 - `dotnet build ApprovalGateway.slnx`
 - `dotnet test ApprovalGateway.slnx`
 
-Not done in this slice: Function App deploy, Azure DevOps, proactive messaging, persistence, Graph, infra/credential changes, push.
+## 22.1. Adaptive Card Function App deployment
+
+Published the Adaptive Card Function package to `func-ado-teams-poc-diegolab`:
+
+```bash
+cd src/ApprovalGateway
+func azure functionapp publish func-ado-teams-poc-diegolab --dotnet-isolated
+```
+
+Result:
+
+- Deployment successful; host state `Running`
+- Functions synced: `BotMessages`, `Health`
+- Health check: `GET .../api/health` → `{"status":"ok"}` HTTP 200
+- Host: `https://func-ado-teams-poc-diegolab-b5crbkdncmcqb6a6.eastus2-01.azurewebsites.net`
+- Azure Bot messaging endpoint already set to `.../api/messages` on that host
+- App settings present: `MicrosoftAppId`, `MicrosoftAppTenantId`, `MicrosoftAppPassword` (unchanged)
+
+Manual Teams validation still required in personal chat:
+
+1. Send `card` → Adaptive Card with Approve/Reject
+2. Click Approve → `POC action received: approve`
+3. Click Reject → `POC action received: reject`
 
 ## 23. Next checkpoint
 
-Deploy the Adaptive Card Function package to `func-ado-teams-poc-diegolab` after local review, validate `card` + Approve/Reject in personal Teams chat, then proceed to **proactive personal messaging** (still before Azure DevOps Service Hooks).
+Validate `card` + Approve/Reject in personal Teams chat against the deployed Function, then proceed to **proactive personal messaging** (still before Azure DevOps Service Hooks).
+
+## 24. Proactive personal messaging slice (implemented locally)
+
+Implemented a temporary POC-only proactive personal Teams messaging path without Azure DevOps integration.
+
+### Mechanism
+
+- Capture Teams personal `ConversationReference` from inbound activities via `Activity.GetConversationReference()`.
+- Store only technical routing fields in `InMemoryPocConversationReferenceStore` (single last personal reference).
+- Send later with `CloudAdapter.ContinueConversationAsync(ClaimsIdentity, ConversationReference, ...)` and plain text: `Proactive Teams notification POC.`
+
+### Microsoft guidance used
+
+- [Proactive messaging in the Agents SDK](https://learn.microsoft.com/en-us/microsoft-365/agents-sdk/proactive-overview)
+- [IChannelAdapter.ContinueConversationAsync](https://learn.microsoft.com/en-us/dotnet/api/microsoft.agents.builder.ichanneladapter.continueconversationasync)
+- [Send proactive messages in Teams](https://learn.microsoft.com/en-us/microsoftteams/platform/bots/how-to/conversations/send-proactive-messages)
+
+Graph not required: Teams app already installed; reference captured from inbound personal chat.
+
+### Trigger endpoint
+
+- `POST /api/poc/proactive`
+- `AuthorizationLevel.Function` (Function key required)
+- Returns 404 when no conversation reference captured on the current instance
+
+### POC limitations documented
+
+- In-memory only; restart/cold start/scale-out may lose reference
+- Not an approver directory; not authoritative routing state
+- No Cosmos/Table/Redis; no Azure DevOps; no Bicep changes; not deployed in this slice
+
+### Validation (local)
+
+```bash
+dotnet build ApprovalGateway.slnx
+dotnet test ApprovalGateway.slnx
+```
+
+33 tests passed (including capture, empty-store error, proactive send uses stored reference, normal bot behavior unchanged).
+
+### Manual test (after future deploy)
+
+1. Chat once in Teams personal app (`hello`) on deployed Function
+2. `POST .../api/poc/proactive?code=<function-key>`
+3. Expect proactive plain-text message in personal chat
+
+Deployment command (not run in this slice):
+
+```bash
+cd src/ApprovalGateway
+func azure functionapp publish func-ado-teams-poc-diegolab --dotnet-isolated
+```
+
+## 25. Next checkpoint
+
+Deploy proactive slice, validate personal chat capture + Function-key trigger end-to-end, then proceed to Azure DevOps Service Hook integration.

@@ -65,7 +65,8 @@ Completed:
 - Azure OpenAI integration disabled.
 - **Application slice 1:** Bot Framework messaging gateway (`POST /api/messages`) implemented and validated end-to-end via Azure Bot Web Chat.
 - **Teams personal chat:** Teams app published/installed in the POC tenant; personal chat validated end-to-end (Teams → Azure Bot → Function → reply).
-- **Application slice — Adaptive Card actions (local):** fake POC Adaptive Card with `Action.Execute` Approve/Reject; invoke acknowledgements only (no Azure DevOps calls). Not deployed yet.
+- **Application slice — Adaptive Card actions:** fake POC Adaptive Card with `Action.Execute` Approve/Reject; invoke acknowledgements only (no Azure DevOps calls). **Deployed** to `func-ado-teams-poc-diegolab`.
+- **Application slice — proactive personal messaging:** capture Teams personal `ConversationReference` in temporary in-memory POC state; send plain-text proactive message via `POST /api/poc/proactive` (Function key). **Implemented locally; not deployed in this slice.**
 
 Detailed execution notes are in [`docs/hands-on-progress.md`](docs/hands-on-progress.md).
 
@@ -85,13 +86,13 @@ Approval Gateway Function App   <-- Bot /api/messages + Adaptive Card actions
 [current local] Teams personal Adaptive Card (fake POC Approve/Reject)
         |
         v
-[next] proactive personal Teams messaging
+[next] proactive personal Teams messaging trigger (implemented locally; not deployed yet)
         |
         v
 [future] Azure DevOps REST API
 ```
 
-Slice 1 covered the Bot Framework inbound path. The Adaptive Card slice adds interactive `Action.Execute` buttons in personal chat only (fake POC data; no approval decisions). Azure DevOps hooks, proactive messaging, and real approval logic remain deferred.
+Slice 1 covered the Bot Framework inbound path. The Adaptive Card slice adds interactive `Action.Execute` buttons in personal chat only (fake POC data; no approval decisions). The proactive slice adds a temporary Function-key trigger that sends a plain-text proactive personal message using in-memory routing state. Azure DevOps hooks and real approval logic remain deferred.
 
 ### Solution layout
 
@@ -99,9 +100,11 @@ Slice 1 covered the Bot Framework inbound path. The Adaptive Card slice adds int
 ApprovalGateway.slnx
 src/ApprovalGateway/          Azure Functions isolated worker (.NET 10)
   Functions/BotMessagesFunction.cs   POST /api/messages
+  Functions/PocProactiveFunction.cs  POST /api/poc/proactive (POC only; Function key)
   Functions/HealthFunction.cs        GET /api/health
   Bot/ApprovalGatewayAgent.cs        message + Adaptive Card Action.Execute handlers
   Bot/PocApprovalCard.cs             fake POC Adaptive Card (schema 1.5)
+  Proactive/                         temporary in-memory conversation reference + proactive send
 tests/ApprovalGateway.Tests/
 ```
 
@@ -166,6 +169,7 @@ dotnet test ApprovalGateway.slnx
 
    - `GET  http://localhost:7071/api/health`
    - `POST http://localhost:7071/api/messages` (Bot Framework; requires valid JWT from Azure Bot Service)
+   - `POST http://localhost:7071/api/poc/proactive?code=<function-key>` (POC proactive trigger; requires Function key from `func start` host output)
 
 For Teams/Web Chat testing against a local host, use a dev tunnel and a Bot client-secret auth configuration. Federated credentials and user-assigned managed identity do not work through a tunnel to a local agent.
 
@@ -191,9 +195,14 @@ Application Insights is already configured at infrastructure level via Bicep (`A
 ### Deployed endpoint (after deployment)
 
 ```text
-POST https://func-ado-teams-poc-diegolab.azurewebsites.net/api/messages
-GET  https://func-ado-teams-poc-diegolab.azurewebsites.net/api/health
+POST https://func-ado-teams-poc-diegolab-b5crbkdncmcqb6a6.eastus2-01.azurewebsites.net/api/messages
+POST https://func-ado-teams-poc-diegolab-b5crbkdncmcqb6a6.eastus2-01.azurewebsites.net/api/poc/proactive?code=<function-key>
+GET  https://func-ado-teams-poc-diegolab-b5crbkdncmcqb6a6.eastus2-01.azurewebsites.net/api/health
 ```
+
+After deployment, retrieve the Function key from Azure Portal → Function App → **Functions** → `PocProactive` → **Function keys** (or `default`). Do not commit keys.
+
+(Flex Consumption default hostname; Azure Bot messaging endpoint already points here.)
 
 ### Manual next step — configure Azure Bot messaging endpoint
 
@@ -228,7 +237,64 @@ After deploying the function package to `func-ado-teams-poc-diegolab`:
 
 **Storage:**
 
-- This slice does **not** register `IStorage` / `MemoryStorage`. `AgentApplicationOptions` falls back to a per-turn `MemoryStorage` when no `IStorage` is in DI. Register persisted storage later when conversation or approval state is introduced.
+- This slice does **not** register SDK `IStorage` / `MemoryStorage` for agent turn state. `AgentApplicationOptions` falls back to a per-turn `MemoryStorage` when no `IStorage` is in DI.
+- Proactive routing uses a separate **temporary in-memory POC store** (`InMemoryPocConversationReferenceStore`) that holds only the last Teams personal `ConversationReference` (technical routing fields). It is **not** durable and is **not** an approver directory. Production will need persisted technical conversation state (Cosmos/Table/Blob or equivalent).
+
+### Proactive personal messaging slice (POC)
+
+Proves the gateway can send a proactive personal Teams message to the already-installed POC user without requiring an inbound message at trigger time.
+
+**Mechanism:** capture `ConversationReference` from inbound personal Teams activities via `Activity.GetConversationReference()`, store in temporary in-memory POC state, then send later with `CloudAdapter.ContinueConversationAsync(ClaimsIdentity, ConversationReference, ...)`.
+
+**Microsoft guidance used:**
+
+- [Proactive messaging in the Agents SDK](https://learn.microsoft.com/en-us/microsoft-365/agents-sdk/proactive-overview)
+- [IChannelAdapter.ContinueConversationAsync](https://learn.microsoft.com/en-us/dotnet/api/microsoft.agents.builder.ichanneladapter.continueconversationasync)
+- [Send proactive messages in Teams](https://learn.microsoft.com/en-us/microsoftteams/platform/bots/how-to/conversations/send-proactive-messages)
+
+**Graph:** not required when the Teams app is already installed and a conversation reference was captured from an inbound activity.
+
+**Trigger endpoint:** `POST /api/poc/proactive`
+
+- `AuthorizationLevel.Function` — requires Function key (`?code=` or `x-functions-key` header).
+- Marked as temporary POC functionality; not part of the production approval surface.
+- Returns **404** when no personal conversation reference has been captured yet.
+
+**Proactive message text:** `Proactive Teams notification POC.`
+
+**Prerequisites for manual test:**
+
+1. Teams personal app already installed for the test user.
+2. Send at least one message in personal chat (captures routing state on the warm instance).
+3. Call `POST /api/poc/proactive` with a valid Function key on the **same warm instance** that handled the chat.
+
+**POC limitations:**
+
+- In-memory only — restart, cold start, or scale-out to another instance loses the reference.
+- Single last personal reference only (no approver directory).
+- Does not store message bodies, tokens, JWTs, or arbitrary Teams payloads.
+- Azure DevOps remains out of scope.
+
+**Manual test (after deploy):**
+
+```bash
+# 1. Chat once in Teams personal app (hello)
+# 2. Trigger proactive send (replace host + key)
+curl -X POST "https://func-ado-teams-poc-diegolab-b5crbkdncmcqb6a6.eastus2-01.azurewebsites.net/api/poc/proactive?code=<function-key>"
+```
+
+Expect the plain-text proactive message in the same personal chat.
+
+### Not implemented yet (future slices)
+
+- Azure DevOps REST API or Service Hooks
+- approval-pending / approval-completed handling
+- real Approve/Reject decisions
+- durable conversation persistence / approver routing
+- Cosmos DB, Table Storage, queues, Durable Functions
+- Graph API, approver lookup, Key Vault, APIM
+- CI/CD pipeline
+- infrastructure changes (Bicep unchanged for this slice)
 
 ### Teams personal app package
 
@@ -244,25 +310,14 @@ Minimum Teams app package for sideloading the existing Azure Bot as a **personal
   - click Reject → `POC action received: reject`
 - Buttons do **not** call Azure DevOps. Card `data`/`verb` are untrusted client input used only for POC acknowledgement.
 
-### Adaptive Card slice (local — not deployed)
+### Adaptive Card slice (deployed)
 
 - Fake POC card only (Application `poc-api`, Environment `PRD`, Run `#12345`).
 - Schema version **1.5**; buttons are **`Action.Execute`** with `verb`/`data.action` = `approve` | `reject`.
 - Callback path: invoke `adaptiveCard/action` → `AdaptiveCards.OnActionExecute` → `AdaptiveCardInvokeResponseFactory.Message(...)`.
 - **POC compatibility decision:** no `Action.Submit` fallback. This validates the modern invoke path against the current Teams client. Microsoft documents Submit fallback for maximum compatibility with older Teams clients; that is a production concern, not this slice.
 - Security: future real approvals must obtain authenticated Teams/Entra identity, current ADO approval state, authorization/approver membership, and environment/run correlation from trusted server-side sources — never from the card payload alone.
-
-### Not implemented yet (future slices)
-
-- Azure DevOps REST API or Service Hooks
-- approval-pending / approval-completed handling
-- real Approve/Reject decisions
-- proactive Teams messages
-- conversation persistence / durable agent state
-- Cosmos DB, Table Storage, queues, Durable Functions
-- Graph API, approver lookup, Key Vault, APIM
-- CI/CD pipeline
-- infrastructure changes (Bicep unchanged)
+- Function package published to `func-ado-teams-poc-diegolab` (Flex hostname below). Manual Teams test: send `card`, then Approve/Reject.
 
 ## Production security note
 

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using ApprovalGateway.Proactive;
 using Microsoft.Agents.Builder;
 using Microsoft.Agents.Builder.App;
 using Microsoft.Agents.Builder.App.AdaptiveCards;
@@ -16,11 +17,16 @@ public sealed class ApprovalGatewayAgent : AgentApplication
     private static readonly Regex AnyVerbPattern = new(".*", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private readonly ILogger<ApprovalGatewayAgent> _logger;
+    private readonly IPocConversationReferenceStore _conversationReferenceStore;
 
-    public ApprovalGatewayAgent(AgentApplicationOptions options, ILogger<ApprovalGatewayAgent> logger)
+    public ApprovalGatewayAgent(
+        AgentApplicationOptions options,
+        ILogger<ApprovalGatewayAgent> logger,
+        IPocConversationReferenceStore conversationReferenceStore)
         : base(options)
     {
         _logger = logger;
+        _conversationReferenceStore = conversationReferenceStore;
 
         OnConversationUpdate(ConversationUpdateEvents.MembersAdded, WelcomeMessageAsync);
         AdaptiveCards.OnActionExecute(PocApprovalCard.ApproveAction, OnApproveActionAsync);
@@ -35,6 +41,7 @@ public sealed class ApprovalGatewayAgent : AgentApplication
     private Task WelcomeMessageAsync(ITurnContext turnContext, ITurnState turnState, CancellationToken cancellationToken)
     {
         ActivityLogging.LogActivityMetadata(_logger, turnContext.Activity);
+        CaptureConversationReference(turnContext.Activity);
 
         foreach (ChannelAccount member in turnContext.Activity.MembersAdded ?? [])
         {
@@ -50,6 +57,7 @@ public sealed class ApprovalGatewayAgent : AgentApplication
     private async Task OnMessageAsync(ITurnContext turnContext, ITurnState turnState, CancellationToken cancellationToken)
     {
         ActivityLogging.LogActivityMetadata(_logger, turnContext.Activity);
+        CaptureConversationReference(turnContext.Activity);
 
         if (IsCardCommand(turnContext.Activity.Text))
         {
@@ -93,6 +101,7 @@ public sealed class ApprovalGatewayAgent : AgentApplication
         CancellationToken cancellationToken)
     {
         ActivityLogging.LogActivityMetadata(_logger, turnContext.Activity);
+        CaptureConversationReference(turnContext.Activity);
 
         string? reportedAction = TryReadActionIdentifier(data);
         _logger.LogWarning(
@@ -109,6 +118,7 @@ public sealed class ApprovalGatewayAgent : AgentApplication
         object data)
     {
         ActivityLogging.LogActivityMetadata(_logger, turnContext.Activity);
+        CaptureConversationReference(turnContext.Activity);
 
         // data.action is untrusted POC input used only for acknowledgement identity checks.
         string? payloadAction = TryReadActionIdentifier(data);
@@ -129,6 +139,9 @@ public sealed class ApprovalGatewayAgent : AgentApplication
         return Task.FromResult(
             AdaptiveCardInvokeResponseFactory.Message(PocApprovalCard.AcknowledgementMessage(expectedAction)));
     }
+
+    private void CaptureConversationReference(IActivity activity) =>
+        PocConversationReferenceCapture.TryCapture(activity, _conversationReferenceStore, _logger);
 
     public static bool IsCardCommand(string? text) =>
         string.Equals(text?.Trim(), PocApprovalCard.CardCommand, StringComparison.OrdinalIgnoreCase);

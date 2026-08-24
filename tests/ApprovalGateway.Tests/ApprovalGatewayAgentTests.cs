@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
 using ApprovalGateway.Bot;
+using ApprovalGateway.Proactive;
 using Microsoft.Agents.Builder.App;
 using Microsoft.Agents.Builder.App.AdaptiveCards;
 using Microsoft.Agents.Builder.State;
@@ -115,10 +116,44 @@ public sealed class ApprovalGatewayAgentTests
         Assert.Null(ApprovalGatewayAgent.TryReadActionIdentifier(null));
     }
 
-    private static async Task<IActivity?> ProcessMessageAsync(string text)
+    [Fact]
+    public async Task OnMessage_PersonalTeams_CapturesConversationReference()
+    {
+        var store = new InMemoryPocConversationReferenceStore();
+        var adapter = new TestAdapter();
+        var agent = CreateAgent(store);
+        var activity = MessageFactory.Text("hello");
+        PopulatePersonalTeamsConversation(activity);
+
+        await adapter.ProcessActivityAsync(
+            new ClaimsIdentity(),
+            activity,
+            async (turnContext, cancellationToken) => await agent.OnTurnAsync(turnContext, cancellationToken),
+            CancellationToken.None);
+
+        Assert.True(store.TryGet(out ConversationReference? reference));
+        Assert.NotNull(reference);
+        Assert.False(string.IsNullOrWhiteSpace(reference.Conversation?.Id));
+        Assert.False(string.IsNullOrWhiteSpace(reference.ServiceUrl));
+        Assert.False(string.IsNullOrWhiteSpace(reference.Agent?.Id));
+        Assert.Equal(Channels.Msteams, reference.ChannelId);
+    }
+
+    [Fact]
+    public async Task OnMessage_NonTeamsChannel_DoesNotCaptureConversationReference()
+    {
+        var store = new InMemoryPocConversationReferenceStore();
+        _ = await ProcessMessageAsync("ping", store);
+
+        Assert.False(store.TryGet(out _));
+    }
+
+    private static async Task<IActivity?> ProcessMessageAsync(
+        string text,
+        IPocConversationReferenceStore? store = null)
     {
         var adapter = new TestAdapter();
-        var agent = CreateAgent();
+        var agent = CreateAgent(store);
         var activity = MessageFactory.Text(text);
         PopulateConversation(activity);
 
@@ -170,10 +205,13 @@ public sealed class ApprovalGatewayAgentTests
         return JsonSerializer.Deserialize<AdaptiveCardInvokeResponse>(JsonSerializer.Serialize(envelope.Body));
     }
 
-    private static ApprovalGatewayAgent CreateAgent()
+    private static ApprovalGatewayAgent CreateAgent(IPocConversationReferenceStore? store = null)
     {
         var options = new AgentApplicationOptions(() => new TurnState());
-        return new ApprovalGatewayAgent(options, NullLogger<ApprovalGatewayAgent>.Instance);
+        return new ApprovalGatewayAgent(
+            options,
+            NullLogger<ApprovalGatewayAgent>.Instance,
+            store ?? new InMemoryPocConversationReferenceStore());
     }
 
     private static void PopulateConversation(IActivity activity)
@@ -182,6 +220,20 @@ public sealed class ApprovalGatewayAgentTests
         activity.Recipient = new ChannelAccount { Id = "bot-1" };
         activity.Conversation = new ConversationAccount { Id = "conversation-1" };
         activity.ChannelId = Channels.Test;
+    }
+
+    private static void PopulatePersonalTeamsConversation(IActivity activity)
+    {
+        activity.From = new ChannelAccount { Id = "user-1" };
+        activity.Recipient = new ChannelAccount { Id = "bot-1" };
+        activity.Conversation = new ConversationAccount
+        {
+            Id = "personal-conversation-1",
+            ConversationType = ConversationTypes.Personal,
+            IsGroup = false,
+        };
+        activity.ChannelId = Channels.Msteams;
+        activity.ServiceUrl = "https://smba.trafficmanager.net/teams/";
     }
 
     private static JsonElement FindActionSetActions(JsonElement root)

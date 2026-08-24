@@ -1,4 +1,6 @@
 using ApprovalGateway.Configuration;
+using ApprovalGateway.Proactive;
+using Microsoft.Agents.Builder;
 using Microsoft.Agents.Hosting.AspNetCore;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Builder;
@@ -33,6 +35,10 @@ builder.AddAgent<ApprovalGateway.Bot.ApprovalGatewayAgent>();
 // SDK registers IAgentHttpAdapter via GetService<CloudAdapter>(), which can yield null.
 // Prefer GetRequiredService so worker constructor injection fails fast if the adapter is missing.
 builder.Services.AddSingleton<IAgentHttpAdapter>(sp => sp.GetRequiredService<CloudAdapter>());
+builder.Services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<CloudAdapter>());
+// Temporary POC-only in-memory conversation routing state (not durable / not authoritative).
+builder.Services.AddSingleton<IPocConversationReferenceStore, InMemoryPocConversationReferenceStore>();
+builder.Services.AddSingleton<PocProactiveMessenger>();
 builder.Services.AddAgentAspNetAuthentication(builder.Configuration);
 
 builder.UseMiddleware<ApprovalGateway.Functions.BotAuthenticationMiddleware>();

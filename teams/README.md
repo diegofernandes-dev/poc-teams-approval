@@ -77,14 +77,15 @@ Steps:
 5. Expect a fake Adaptive Card with Approve / Reject.
 6. Click Approve → `POC action received: approve`
 7. Click Reject → `POC action received: reject`
+8. After deploy of the proactive slice: trigger `POST /api/poc/proactive` with a Function key (see root README) → expect `Proactive Teams notification POC.` in the same personal chat (requires a prior inbound message on the same warm instance).
 
 Buttons do not call Azure DevOps. Card payloads are untrusted POC input only.
 
 ## Explicitly out of scope (future slices)
 
 - Real Approve/Reject decisions or Azure DevOps REST approval APIs
-- Proactive Teams messaging
 - Azure DevOps Service Hooks
+- Durable conversation persistence / approver routing (POC uses temporary in-memory routing state only)
 - SSO, Graph permissions, tabs, message extensions
 - Publishing to org catalog or Teams Store
 - `Action.Submit` fallback for older Teams clients (POC uses `Action.Execute` only)
