@@ -64,7 +64,8 @@ Completed:
 - Durable Task Scheduler disabled.
 - Azure OpenAI integration disabled.
 - **Application slice 1:** Bot Framework messaging gateway (`POST /api/messages`) implemented and validated end-to-end via Azure Bot Web Chat.
-- **Teams app package (personal):** minimum sideload package under [`teams/`](teams/) for installing the existing Azure Bot as a personal Teams app (manual upload; not published).
+- **Teams personal chat:** Teams app published/installed in the POC tenant; personal chat validated end-to-end (Teams → Azure Bot → Function → reply).
+- **Application slice — Adaptive Card actions (local):** fake POC Adaptive Card with `Action.Execute` Approve/Reject; invoke acknowledgements only (no Azure DevOps calls). Not deployed yet.
 
 Detailed execution notes are in [`docs/hands-on-progress.md`](docs/hands-on-progress.md).
 
@@ -78,16 +79,19 @@ This slice implements the minimum Azure Functions application required to receiv
 [future] Azure DevOps Service Hook
         |
         v
-Approval Gateway Function App   <-- slice 1 starts here (Bot /api/messages only)
+Approval Gateway Function App   <-- Bot /api/messages + Adaptive Card actions
         |
         v
-[future] Teams personal message + Adaptive Card
+[current local] Teams personal Adaptive Card (fake POC Approve/Reject)
+        |
+        v
+[next] proactive personal Teams messaging
         |
         v
 [future] Azure DevOps REST API
 ```
 
-Slice 1 covers only the Bot Framework inbound path. Azure DevOps hooks, Adaptive Cards, proactive messaging, and approval logic are intentionally deferred.
+Slice 1 covered the Bot Framework inbound path. The Adaptive Card slice adds interactive `Action.Execute` buttons in personal chat only (fake POC data; no approval decisions). Azure DevOps hooks, proactive messaging, and real approval logic remain deferred.
 
 ### Solution layout
 
@@ -96,7 +100,8 @@ ApprovalGateway.slnx
 src/ApprovalGateway/          Azure Functions isolated worker (.NET 10)
   Functions/BotMessagesFunction.cs   POST /api/messages
   Functions/HealthFunction.cs        GET /api/health
-  Bot/ApprovalGatewayAgent.cs        minimal reply + structured logging
+  Bot/ApprovalGatewayAgent.cs        message + Adaptive Card Action.Execute handlers
+  Bot/PocApprovalCard.cs             fake POC Adaptive Card (schema 1.5)
 tests/ApprovalGateway.Tests/
 ```
 
@@ -232,13 +237,26 @@ Minimum Teams app package for sideloading the existing Azure Bot as a **personal
 - Build: `./scripts/teams/build-app-package.sh` → `build/teams/ApprovalGateway.zip`
 - Teams App ID (manifest `id`) is distinct from the Azure Bot Microsoft App ID (`bots[].botId`)
 - Manual install only (no automatic publish/install in this slice)
-- Expected chat test: send `hello` → reply `Approval Gateway POC is online.`
+- Expected chat tests:
+  - send `hello` → reply `Approval Gateway POC is online.`
+  - send `card` → fake Adaptive Card with Approve/Reject (`Action.Execute`)
+  - click Approve → `POC action received: approve`
+  - click Reject → `POC action received: reject`
+- Buttons do **not** call Azure DevOps. Card `data`/`verb` are untrusted client input used only for POC acknowledgement.
+
+### Adaptive Card slice (local — not deployed)
+
+- Fake POC card only (Application `poc-api`, Environment `PRD`, Run `#12345`).
+- Schema version **1.5**; buttons are **`Action.Execute`** with `verb`/`data.action` = `approve` | `reject`.
+- Callback path: invoke `adaptiveCard/action` → `AdaptiveCards.OnActionExecute` → `AdaptiveCardInvokeResponseFactory.Message(...)`.
+- **POC compatibility decision:** no `Action.Submit` fallback. This validates the modern invoke path against the current Teams client. Microsoft documents Submit fallback for maximum compatibility with older Teams clients; that is a production concern, not this slice.
+- Security: future real approvals must obtain authenticated Teams/Entra identity, current ADO approval state, authorization/approver membership, and environment/run correlation from trusted server-side sources — never from the card payload alone.
 
 ### Not implemented yet (future slices)
 
 - Azure DevOps REST API or Service Hooks
 - approval-pending / approval-completed handling
-- Adaptive Cards, Approve/Reject actions
+- real Approve/Reject decisions
 - proactive Teams messages
 - conversation persistence / durable agent state
 - Cosmos DB, Table Storage, queues, Durable Functions

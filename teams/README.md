@@ -13,7 +13,7 @@ Teams personal app
   -> reply
 ```
 
-The package contains **no app logic**, **no secrets**, and **no Adaptive Cards**. Runtime behavior lives in Azure (`func-ado-teams-poc-diegolab` + `bot-ado-teams-poc-diegolab`).
+The package contains **no app logic** and **no secrets**. Runtime Adaptive Card behavior lives in Azure (`func-ado-teams-poc-diegolab` + `bot-ado-teams-poc-diegolab`).
 
 ## Teams App ID vs Azure Bot App ID
 
@@ -73,14 +73,21 @@ Steps:
 1. Open the personal app chat.
 2. Send: `hello`
 3. Expect reply: `Approval Gateway POC is online.`
+4. Send: `card`
+5. Expect a fake Adaptive Card with Approve / Reject.
+6. Click Approve → `POC action received: approve`
+7. Click Reject → `POC action received: reject`
+
+Buttons do not call Azure DevOps. Card payloads are untrusted POC input only.
 
 ## Explicitly out of scope (future slices)
 
-- Adaptive Cards / Approve–Reject actions
+- Real Approve/Reject decisions or Azure DevOps REST approval APIs
 - Proactive Teams messaging
-- Azure DevOps Service Hooks or REST approval APIs
+- Azure DevOps Service Hooks
 - SSO, Graph permissions, tabs, message extensions
 - Publishing to org catalog or Teams Store
+- `Action.Submit` fallback for older Teams clients (POC uses `Action.Execute` only)
 
 ## Security notes
 

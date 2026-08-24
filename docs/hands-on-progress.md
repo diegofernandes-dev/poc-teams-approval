@@ -538,7 +538,7 @@ Validated locally:
 - ZIP root layout (`manifest.json`, `color.png`, `outline.png`)
 - JSON Schema Draft 4 validation against Microsoft Teams schema v1.30
 
-Not done in this slice: sideload/upload to Teams, Adaptive Cards, proactive messaging, Azure DevOps Service Hooks, Azure resource changes, commit/push.
+Not done in this slice: Adaptive Cards, proactive messaging, Azure DevOps Service Hooks, Azure resource changes, commit/push.
 
 ### Expected manual test (after sideload)
 
@@ -547,6 +547,49 @@ Not done in this slice: sideload/upload to Teams, Adaptive Cards, proactive mess
 3. Send `hello`.
 4. Expect: `Approval Gateway POC is online.`
 
-## 21. Next checkpoint
+## 21. Teams personal chat validation
 
-Manually sideload the Teams package in a tenant that allows custom apps, confirm personal chat round-trip, then proceed to Adaptive Cards / proactive messaging and Azure DevOps integration in later slices.
+Personal Teams chat is validated end-to-end in the POC tenant:
+
+- Teams App ID: `831041ff-1d21-4a08-958e-02b17c10d7c2`
+- Bot App ID: `5936429a-7889-45c1-983e-d9064aa7ee84`
+- Path: Teams → Azure Bot → Function (`POST /api/messages`) → reply
+- Normal text reply: `Approval Gateway POC is online.`
+
+## 22. Application slice — Adaptive Card actions (local)
+
+Implemented interactive Adaptive Card Approve/Reject for personal chat validation only.
+
+Delivered:
+
+- `Bot/PocApprovalCard.cs` — fake POC Adaptive Card, schema **1.5**
+- `ApprovalGatewayAgent` — `card` command sends the card; `AdaptiveCards.OnActionExecute` handles `approve` / `reject`
+- Unknown Action.Execute verbs return BadRequest (no approval semantics)
+- Structured logs for card requested/sent and normalized action name (no tokens/secrets/full payloads)
+- Unit tests for card attachment, action identifiers, approve/reject acknowledgements, unknown action, and normal text
+
+Action mechanism:
+
+- **`Action.Execute` only** (no `Action.Submit` fallback)
+- Callback: invoke `adaptiveCard/action`
+- Ack: `AdaptiveCardInvokeResponseFactory.Message("POC action received: approve|reject")`
+
+POC compatibility note: omitting Submit fallback is intentional for this slice to validate the modern invoke path against the already validated current Teams client. Microsoft documents `Action.Submit` fallback for maximum compatibility with older Teams clients; that remains a production recommendation, not a POC requirement.
+
+Security:
+
+- Card `data` / `verb` are **untrusted** client input.
+- This slice reads only a minimal `action` identifier for acknowledgement.
+- Future real approval processing MUST obtain authenticated Teams/Entra identity, current Azure DevOps approval state, authorization/approver membership, and environment/run correlation from trusted server-side sources — never from the card alone.
+- Buttons do **not** call Azure DevOps. No state changes. No real approval decisions.
+
+Validated locally:
+
+- `dotnet build ApprovalGateway.slnx`
+- `dotnet test ApprovalGateway.slnx`
+
+Not done in this slice: Function App deploy, Azure DevOps, proactive messaging, persistence, Graph, infra/credential changes, push.
+
+## 23. Next checkpoint
+
+Deploy the Adaptive Card Function package to `func-ado-teams-poc-diegolab` after local review, validate `card` + Approve/Reject in personal Teams chat, then proceed to **proactive personal messaging** (still before Azure DevOps Service Hooks).
