@@ -21,6 +21,18 @@ param deploymentContainerName string = 'app-package-func-ado-teams-poc-diegolab-
 @description('Application Insights resource name.')
 param applicationInsightsName string = 'func-ado-teams-poc-diegolab'
 
+@description('Existing Log Analytics Workspace resource ID used by workspace-based Application Insights.')
+param logAnalyticsWorkspaceResourceId string
+
+@description('Existing Storage Blob Data Owner role assignment resource name for the Function managed identity.')
+param hostStorageRoleAssignmentName string
+
+@description('Existing Storage Blob Data Contributor role assignment resource name for the Function deployment container.')
+param deploymentStorageRoleAssignmentName string
+
+@description('Existing Monitoring Metrics Publisher role assignment resource name for Application Insights.')
+param appInsightsRoleAssignmentName string
+
 @description('Runtime version used by dotnet-isolated.')
 param runtimeVersion string = '10.0'
 
@@ -55,6 +67,10 @@ module platform './modules/platform.bicep' = {
     storageAccountName: storageAccountName
     deploymentContainerName: deploymentContainerName
     applicationInsightsName: applicationInsightsName
+    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
+    hostStorageRoleAssignmentName: hostStorageRoleAssignmentName
+    deploymentStorageRoleAssignmentName: deploymentStorageRoleAssignmentName
+    appInsightsRoleAssignmentName: appInsightsRoleAssignmentName
     runtimeVersion: runtimeVersion
     instanceMemoryMB: instanceMemoryMB
     maximumInstanceCount: maximumInstanceCount
