@@ -6,6 +6,10 @@ param planName string
 param storageAccountName string
 param deploymentContainerName string
 param applicationInsightsName string
+param logAnalyticsWorkspaceResourceId string
+param hostStorageRoleAssignmentName string
+param deploymentStorageRoleAssignmentName string
+param appInsightsRoleAssignmentName string
 param runtimeVersion string
 param instanceMemoryMB int
 param maximumInstanceCount int
@@ -14,6 +18,7 @@ param tags object
 var storageBlobDataOwnerRoleId = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
 var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
+var appInsightsHiddenLink = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroup().name}/providers/microsoft.insights/components/${applicationInsightsName}'
 
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
@@ -65,7 +70,8 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   kind: 'web'
   properties: {
     Application_Type: 'web'
-    IngestionMode: 'ApplicationInsights'
+    IngestionMode: 'LogAnalytics'
+    WorkspaceResourceId: logAnalyticsWorkspaceResourceId
     publicNetworkAccessForIngestion: 'Enabled'
     publicNetworkAccessForQuery: 'Enabled'
   }
@@ -74,7 +80,9 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   name: functionAppName
   location: location
-  tags: tags
+  tags: union(tags, {
+    'hidden-link: /app-insights-resource-id': appInsightsHiddenLink
+  })
   kind: 'functionapp,linux'
   identity: {
     type: 'SystemAssigned'
@@ -136,7 +144,7 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
 }
 
 resource hostStorageBlobOwner 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storage.id, functionApp.id, storageBlobDataOwnerRoleId)
+  name: hostStorageRoleAssignmentName
   scope: storage
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataOwnerRoleId)
@@ -146,7 +154,7 @@ resource hostStorageBlobOwner 'Microsoft.Authorization/roleAssignments@2022-04-0
 }
 
 resource deploymentStorageBlobContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(deploymentContainer.id, functionApp.id, storageBlobDataContributorRoleId)
+  name: deploymentStorageRoleAssignmentName
   scope: deploymentContainer
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataContributorRoleId)
@@ -156,7 +164,7 @@ resource deploymentStorageBlobContributor 'Microsoft.Authorization/roleAssignmen
 }
 
 resource appInsightsMetricsPublisher 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(appInsights.id, functionApp.id, monitoringMetricsPublisherRoleId)
+  name: appInsightsRoleAssignmentName
   scope: appInsights
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringMetricsPublisherRoleId)
