@@ -17,10 +17,36 @@ The Bicep currently models:
 - `Storage Blob Data Owner` on the host Storage Account;
 - `Storage Blob Data Contributor` on the deployment package container;
 - `Monitoring Metrics Publisher` on Application Insights;
+- Azure Bot (`bot-ado-teams-poc-diegolab`) with SingleTenant configuration;
+- Microsoft Teams channel on the Azure Bot;
+- Function App bot settings: `MicrosoftAppId`, `MicrosoftAppTenantId`, `MicrosoftAppPassword`;
 - POC tags;
 - public ingress enabled and no VNet integration, matching the current POC posture.
 
-The Azure Cost Management budget is intentionally not included in this first IaC slice.
+### Intentionally external / manual
+
+- Entra App Registration lifecycle (`5936429a-7889-45c1-983e-d9064aa7ee84`) — referenced by parameters only, not created by Bicep;
+- Bot App Registration client secret value — supplied at deploy time via `@secure()` parameter, never committed;
+- Web Chat and Direct Line channels — Portal defaults, not managed in this slice;
+- Azure Cost Management budget.
+
+## Critical: appSettings replace semantics
+
+`Microsoft.Web/sites` `siteConfig.appSettings` uses **replace semantics**. The Bicep template declares the complete authoritative list of application settings. Any manually-added setting not represented in Bicep will be **deleted** on the next deployment.
+
+The template currently owns these Function App settings:
+
+- `AzureWebJobsStorage__accountName`
+- `AzureWebJobsStorage__credential`
+- `APPLICATIONINSIGHTS_CONNECTION_STRING`
+- `APPLICATIONINSIGHTS_AUTHENTICATION_STRING`
+- `MicrosoftAppId`
+- `MicrosoftAppTenantId`
+- `MicrosoftAppPassword`
+
+`APPINSIGHTS_INSTRUMENTATIONKEY` is intentionally omitted — it is redundant with `APPLICATIONINSIGHTS_CONNECTION_STRING`.
+
+Do **not** add `FUNCTIONS_WORKER_RUNTIME` or `FUNCTIONS_EXTENSION_VERSION` on Flex Consumption. Runtime is configured via `functionAppConfig.runtime`.
 
 ## Important: do not deploy first
 
@@ -57,15 +83,19 @@ This must succeed before any Azure operation.
 
 ## What-if
 
-Because `main.bicep` is subscription-scoped:
+Because `main.bicep` is subscription-scoped and `microsoftAppPassword` is a secure parameter, supply it via environment variable at the command line. Never commit the secret.
 
 ```bash
+read -s MICROSOFT_APP_PASSWORD && export MICROSOFT_APP_PASSWORD
 az deployment sub what-if \
-  --name poc-teams-approval-iac-check \
+  --name poc-teams-approval-bot-iac-check \
   --location eastus2 \
   --template-file infra/main.bicep \
   --parameters infra/poc.bicepparam
+unset MICROSOFT_APP_PASSWORD
 ```
+
+`poc.bicepparam` reads the secret with `readEnvironmentVariable('MICROSOFT_APP_PASSWORD')` — no value is stored in the repository.
 
 Review every proposed change.
 
@@ -78,20 +108,32 @@ No Storage Account replacement.
 No Managed Identity replacement.
 No unexpected networking change.
 No RBAC removal.
+No Create for existing Azure Bot or MsTeamsChannel.
+No Delete for WebChatChannel or DirectLineChannel.
+No removal of APPLICATIONINSIGHTS_CONNECTION_STRING or APPLICATIONINSIGHTS_AUTHENTICATION_STRING.
+MicrosoftAppPassword preserved (not null, not removed).
 ```
 
-Some differences may exist because the Azure Portal creates defaults that were not explicitly selected during the walkthrough. Those differences must be reviewed individually and either represented in Bicep or intentionally accepted before deployment.
+Acceptable changes:
+
+- Modify on existing Azure Bot and MsTeamsChannel (adoption);
+- Modify on Function App appSettings (bot settings adoption, removal of redundant APPINSIGHTS_INSTRUMENTATIONKEY);
+- ARM expression/default-value normalization noise on platform resources.
+
+Stop and investigate if what-if shows Create for the bot, Create for MsTeamsChannel, any Delete, Function replacement, identity change, WebChat/DirectLine channel changes, or MicrosoftAppPassword removal.
 
 ## Deployment
 
 Do not run this until the `what-if` has been reviewed and accepted:
 
 ```bash
+read -s MICROSOFT_APP_PASSWORD && export MICROSOFT_APP_PASSWORD
 az deployment sub create \
-  --name poc-teams-approval-infra \
+  --name poc-teams-approval-bot-iac-adopt \
   --location eastus2 \
   --template-file infra/main.bicep \
   --parameters infra/poc.bicepparam
+unset MICROSOFT_APP_PASSWORD
 ```
 
 ## Current POC networking warning
@@ -113,5 +155,6 @@ infra/
 ├── poc.bicepparam
 ├── README.md
 └── modules/
-    └── platform.bicep
+    ├── platform.bicep
+    └── bot.bicep
 ```

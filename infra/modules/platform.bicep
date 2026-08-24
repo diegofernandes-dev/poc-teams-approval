@@ -13,6 +13,10 @@ param appInsightsRoleAssignmentName string
 param runtimeVersion string
 param instanceMemoryMB int
 param maximumInstanceCount int
+param botMicrosoftAppId string
+param botTenantId string
+@secure()
+param microsoftAppPassword string
 param tags object
 
 var storageBlobDataOwnerRoleId = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
@@ -111,6 +115,18 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
           name: 'APPLICATIONINSIGHTS_AUTHENTICATION_STRING'
           value: 'Authorization=AAD'
         }
+        {
+          name: 'MicrosoftAppId'
+          value: botMicrosoftAppId
+        }
+        {
+          name: 'MicrosoftAppTenantId'
+          value: botTenantId
+        }
+        {
+          name: 'MicrosoftAppPassword'
+          value: microsoftAppPassword
+        }
       ]
     }
     functionAppConfig: {
@@ -167,4 +183,5 @@ resource appInsightsMetricsPublisher 'Microsoft.Authorization/roleAssignments@20
 
 output functionAppResourceId string = functionApp.id
 output functionAppPrincipalId string = functionApp.identity.principalId
+output functionAppDefaultHostName string = functionApp.properties.defaultHostName
 output storageAccountResourceId string = storage.id

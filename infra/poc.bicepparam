@@ -14,6 +14,12 @@ param appInsightsRoleAssignmentName = '74d3277c-6b9f-5dbd-a6b6-7d826a724d02'
 param runtimeVersion = '10.0'
 param instanceMemoryMB = 512
 param maximumInstanceCount = 100
+param botName = 'bot-ado-teams-poc-diegolab'
+param botDisplayName = 'bot-ado-teams-poc-diegolab'
+param botMicrosoftAppId = '5936429a-7889-45c1-983e-d9064aa7ee84'
+param botTenantId = 'e9dbba09-e7a3-42be-9a2c-f82470024e00'
+param botMessagingEndpoint = 'https://func-ado-teams-poc-diegolab-b5crbkdncmcqb6a6.eastus2-01.azurewebsites.net/api/messages'
+param microsoftAppPassword = readEnvironmentVariable('MICROSOFT_APP_PASSWORD')
 param tags = {
   project: 'poc-teams-approval'
   environment: 'poc'

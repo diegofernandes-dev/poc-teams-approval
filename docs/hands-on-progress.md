@@ -407,6 +407,35 @@ Storage Blob Data Owner        ac5dabde-0f09-58c2-b7f0-e7b5186c9961
 
 The Azure infrastructure foundation is therefore considered closed and managed through Bicep for subsequent Azure-side changes.
 
+## 14.1. Azure Bot IaC adoption slice
+
+After manually validating the Azure Bot and Function App bot settings, a second IaC slice captures:
+
+- Azure Bot `bot-ado-teams-poc-diegolab` (`Microsoft.BotService/botServices@2022-09-15`);
+- Microsoft Teams channel (`MsTeamsChannel` child resource);
+- Function App bot settings: `MicrosoftAppId`, `MicrosoftAppTenantId`, `MicrosoftAppPassword`.
+
+Files added/updated:
+
+```text
+infra/modules/bot.bicep
+infra/main.bicep
+infra/modules/platform.bicep
+infra/poc.bicepparam
+infra/README.md
+```
+
+Design decisions:
+
+- Entra App Registration remains external — referenced by `botMicrosoftAppId` / `botTenantId` parameters only;
+- `microsoftAppPassword` is a `@secure()` deploy-time parameter — read from `MICROSOFT_APP_PASSWORD` environment variable via `readEnvironmentVariable`, never committed;
+- `siteConfig.appSettings` uses replace semantics — the template declares the full authoritative settings list;
+- `APPINSIGHTS_INSTRUMENTATIONKEY` is omitted — redundant with `APPLICATIONINSIGHTS_CONNECTION_STRING`;
+- Web Chat and Direct Line channels remain Portal-managed — only `MsTeamsChannel` is declared in Bicep;
+- Bot messaging endpoint is parameterized as `botMessagingEndpoint` with the validated hostname.
+
+Validation workflow: `az bicep build`, then subscription `what-if` with secure password supplied at the CLI. No deployment until what-if is reviewed.
+
 ## 15. Architecture constraints to preserve
 
 The implementation must preserve these rules throughout the POC:

@@ -47,6 +47,25 @@ param instanceMemoryMB int = 512
 @description('Maximum number of Flex Consumption instances.')
 param maximumInstanceCount int = 100
 
+@description('Azure Bot resource name.')
+param botName string = 'bot-ado-teams-poc-diegolab'
+
+@description('Azure Bot display name.')
+param botDisplayName string = 'bot-ado-teams-poc-diegolab'
+
+@description('Microsoft App (client) ID of the existing Entra App Registration referenced by the Azure Bot.')
+param botMicrosoftAppId string = '5936429a-7889-45c1-983e-d9064aa7ee84'
+
+@description('Microsoft Entra tenant ID for the SingleTenant Azure Bot.')
+param botTenantId string = 'e9dbba09-e7a3-42be-9a2c-f82470024e00'
+
+@description('Validated Bot Framework messaging endpoint for the Function App.')
+param botMessagingEndpoint string
+
+@description('Bot App Registration client secret. Supply at deploy time only; never commit.')
+@secure()
+param microsoftAppPassword string
+
 param tags object = {
   project: 'poc-teams-approval'
   environment: 'poc'
@@ -74,6 +93,22 @@ module platform './modules/platform.bicep' = {
     runtimeVersion: runtimeVersion
     instanceMemoryMB: instanceMemoryMB
     maximumInstanceCount: maximumInstanceCount
+    botMicrosoftAppId: botMicrosoftAppId
+    botTenantId: botTenantId
+    microsoftAppPassword: microsoftAppPassword
+    tags: tags
+  }
+}
+
+module bot './modules/bot.bicep' = {
+  name: 'poc-teams-approval-bot'
+  scope: rg
+  params: {
+    botName: botName
+    botDisplayName: botDisplayName
+    botMicrosoftAppId: botMicrosoftAppId
+    botTenantId: botTenantId
+    botMessagingEndpoint: botMessagingEndpoint
     tags: tags
   }
 }
@@ -81,3 +116,4 @@ module platform './modules/platform.bicep' = {
 output functionAppResourceId string = platform.outputs.functionAppResourceId
 output functionAppPrincipalId string = platform.outputs.functionAppPrincipalId
 output storageAccountResourceId string = platform.outputs.storageAccountResourceId
+output botResourceId string = bot.outputs.botResourceId
