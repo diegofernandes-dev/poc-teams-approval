@@ -11,6 +11,12 @@ var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
 
+// FunctionsApplicationBuilder does not load appsettings.json by default (unlike WebApplication).
+// Use BaseDirectory so Flex Consumption finds the file next to the worker assembly.
+builder.Configuration
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
+
 var configurationOverrides = BotConfiguration.MapMicrosoftAppSettings(builder.Configuration);
 if (configurationOverrides.Count > 0)
 {
@@ -24,6 +30,9 @@ builder.Services
 builder.Services.AddHttpClient();
 builder.AddAgentApplicationOptions();
 builder.AddAgent<ApprovalGateway.Bot.ApprovalGatewayAgent>();
+// SDK registers IAgentHttpAdapter via GetService<CloudAdapter>(), which can yield null.
+// Prefer GetRequiredService so worker constructor injection fails fast if the adapter is missing.
+builder.Services.AddSingleton<IAgentHttpAdapter>(sp => sp.GetRequiredService<CloudAdapter>());
 builder.Services.AddAgentAspNetAuthentication(builder.Configuration);
 
 builder.UseMiddleware<ApprovalGateway.Functions.BotAuthenticationMiddleware>();

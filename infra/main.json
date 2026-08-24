@@ -1,0 +1,648 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.46.1.21595",
+      "templateHash": "769123185531888533"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "eastus2",
+      "metadata": {
+        "description": "Azure region for the POC resources."
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "rg-ado-teams-poc",
+      "metadata": {
+        "description": "Resource group that hosts the POC resources."
+      }
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "func-ado-teams-poc-diegolab",
+      "metadata": {
+        "description": "Function App name."
+      }
+    },
+    "planName": {
+      "type": "string",
+      "defaultValue": "ASP-rgadoteamspoc-9431",
+      "metadata": {
+        "description": "Flex Consumption plan name."
+      }
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "rgadoteamspoc9a37",
+      "metadata": {
+        "description": "Storage Account name. Must be globally unique."
+      }
+    },
+    "deploymentContainerName": {
+      "type": "string",
+      "defaultValue": "app-package-func-ado-teams-poc-diegolab-1f4bef4",
+      "metadata": {
+        "description": "Deployment package container name used by Flex Consumption."
+      }
+    },
+    "applicationInsightsName": {
+      "type": "string",
+      "defaultValue": "func-ado-teams-poc-diegolab",
+      "metadata": {
+        "description": "Application Insights resource name."
+      }
+    },
+    "logAnalyticsWorkspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Existing Log Analytics Workspace resource ID used by workspace-based Application Insights."
+      }
+    },
+    "hostStorageRoleAssignmentName": {
+      "type": "string",
+      "metadata": {
+        "description": "Existing Storage Blob Data Owner role assignment resource name for the Function managed identity."
+      }
+    },
+    "deploymentStorageRoleAssignmentName": {
+      "type": "string",
+      "metadata": {
+        "description": "Existing Storage Blob Data Contributor role assignment resource name for the Function deployment container."
+      }
+    },
+    "appInsightsRoleAssignmentName": {
+      "type": "string",
+      "metadata": {
+        "description": "Existing Monitoring Metrics Publisher role assignment resource name for Application Insights."
+      }
+    },
+    "runtimeVersion": {
+      "type": "string",
+      "defaultValue": "10.0",
+      "metadata": {
+        "description": "Runtime version used by dotnet-isolated."
+      }
+    },
+    "instanceMemoryMB": {
+      "type": "int",
+      "defaultValue": 512,
+      "allowedValues": [
+        512,
+        2048,
+        4096
+      ],
+      "metadata": {
+        "description": "Flex Consumption instance memory in MB."
+      }
+    },
+    "maximumInstanceCount": {
+      "type": "int",
+      "defaultValue": 100,
+      "metadata": {
+        "description": "Maximum number of Flex Consumption instances."
+      }
+    },
+    "botName": {
+      "type": "string",
+      "defaultValue": "bot-ado-teams-poc-diegolab",
+      "metadata": {
+        "description": "Azure Bot resource name."
+      }
+    },
+    "botDisplayName": {
+      "type": "string",
+      "defaultValue": "bot-ado-teams-poc-diegolab",
+      "metadata": {
+        "description": "Azure Bot display name."
+      }
+    },
+    "botMicrosoftAppId": {
+      "type": "string",
+      "defaultValue": "5936429a-7889-45c1-983e-d9064aa7ee84",
+      "metadata": {
+        "description": "Microsoft App (client) ID of the existing Entra App Registration referenced by the Azure Bot."
+      }
+    },
+    "botTenantId": {
+      "type": "string",
+      "defaultValue": "e9dbba09-e7a3-42be-9a2c-f82470024e00",
+      "metadata": {
+        "description": "Microsoft Entra tenant ID for the SingleTenant Azure Bot."
+      }
+    },
+    "botMessagingEndpoint": {
+      "type": "string",
+      "metadata": {
+        "description": "Validated Bot Framework messaging endpoint for the Function App."
+      }
+    },
+    "microsoftAppPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Bot App Registration client secret. Supply at deploy time only; never commit."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "project": "poc-teams-approval",
+        "environment": "poc"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('resourceGroupName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "poc-teams-approval-platform",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "functionAppName": {
+            "value": "[parameters('functionAppName')]"
+          },
+          "planName": {
+            "value": "[parameters('planName')]"
+          },
+          "storageAccountName": {
+            "value": "[parameters('storageAccountName')]"
+          },
+          "deploymentContainerName": {
+            "value": "[parameters('deploymentContainerName')]"
+          },
+          "applicationInsightsName": {
+            "value": "[parameters('applicationInsightsName')]"
+          },
+          "logAnalyticsWorkspaceResourceId": {
+            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+          },
+          "hostStorageRoleAssignmentName": {
+            "value": "[parameters('hostStorageRoleAssignmentName')]"
+          },
+          "deploymentStorageRoleAssignmentName": {
+            "value": "[parameters('deploymentStorageRoleAssignmentName')]"
+          },
+          "appInsightsRoleAssignmentName": {
+            "value": "[parameters('appInsightsRoleAssignmentName')]"
+          },
+          "runtimeVersion": {
+            "value": "[parameters('runtimeVersion')]"
+          },
+          "instanceMemoryMB": {
+            "value": "[parameters('instanceMemoryMB')]"
+          },
+          "maximumInstanceCount": {
+            "value": "[parameters('maximumInstanceCount')]"
+          },
+          "botMicrosoftAppId": {
+            "value": "[parameters('botMicrosoftAppId')]"
+          },
+          "botTenantId": {
+            "value": "[parameters('botTenantId')]"
+          },
+          "microsoftAppPassword": {
+            "value": "[parameters('microsoftAppPassword')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "6810863953974939768"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "functionAppName": {
+              "type": "string"
+            },
+            "planName": {
+              "type": "string"
+            },
+            "storageAccountName": {
+              "type": "string"
+            },
+            "deploymentContainerName": {
+              "type": "string"
+            },
+            "applicationInsightsName": {
+              "type": "string"
+            },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string"
+            },
+            "hostStorageRoleAssignmentName": {
+              "type": "string"
+            },
+            "deploymentStorageRoleAssignmentName": {
+              "type": "string"
+            },
+            "appInsightsRoleAssignmentName": {
+              "type": "string"
+            },
+            "runtimeVersion": {
+              "type": "string"
+            },
+            "instanceMemoryMB": {
+              "type": "int"
+            },
+            "maximumInstanceCount": {
+              "type": "int"
+            },
+            "botMicrosoftAppId": {
+              "type": "string"
+            },
+            "botTenantId": {
+              "type": "string"
+            },
+            "microsoftAppPassword": {
+              "type": "securestring"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "variables": {
+            "storageBlobDataOwnerRoleId": "b7e6dc6d-f1e8-4753-8033-0f276bb0955b",
+            "storageBlobDataContributorRoleId": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
+            "monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+            "appInsightsHiddenLink": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/microsoft.insights/components/{2}', subscription().subscriptionId, resourceGroup().name, parameters('applicationInsightsName'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2023-05-01",
+              "name": "[parameters('storageAccountName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "minimumTlsVersion": "TLS1_2",
+                "allowBlobPublicAccess": false,
+                "publicNetworkAccess": "Enabled"
+              }
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices",
+              "apiVersion": "2023-05-01",
+              "name": "[format('{0}/{1}', parameters('storageAccountName'), 'default')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2023-05-01",
+              "name": "[format('{0}/{1}/{2}', parameters('storageAccountName'), 'default', parameters('deploymentContainerName'))]",
+              "properties": {
+                "publicAccess": "None"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2023-12-01",
+              "name": "[parameters('planName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "functionapp",
+              "sku": {
+                "name": "FC1",
+                "tier": "FlexConsumption"
+              },
+              "properties": {
+                "reserved": true,
+                "zoneRedundant": false
+              }
+            },
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[parameters('applicationInsightsName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web",
+                "IngestionMode": "LogAnalytics",
+                "WorkspaceResourceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+              }
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2023-12-01",
+              "name": "[parameters('functionAppName')]",
+              "location": "[parameters('location')]",
+              "tags": "[union(parameters('tags'), createObject('hidden-link: /app-insights-resource-id', variables('appInsightsHiddenLink')))]",
+              "kind": "functionapp,linux",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('planName'))]",
+                "httpsOnly": true,
+                "publicNetworkAccess": "Enabled",
+                "siteConfig": {
+                  "minTlsVersion": "1.2",
+                  "ftpsState": "Disabled",
+                  "appSettings": [
+                    {
+                      "name": "AzureWebJobsStorage__accountName",
+                      "value": "[parameters('storageAccountName')]"
+                    },
+                    {
+                      "name": "AzureWebJobsStorage__credential",
+                      "value": "managedidentity"
+                    },
+                    {
+                      "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                      "value": "[reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').ConnectionString]"
+                    },
+                    {
+                      "name": "APPLICATIONINSIGHTS_AUTHENTICATION_STRING",
+                      "value": "Authorization=AAD"
+                    },
+                    {
+                      "name": "MicrosoftAppId",
+                      "value": "[parameters('botMicrosoftAppId')]"
+                    },
+                    {
+                      "name": "MicrosoftAppTenantId",
+                      "value": "[parameters('botTenantId')]"
+                    },
+                    {
+                      "name": "MicrosoftAppPassword",
+                      "value": "[parameters('microsoftAppPassword')]"
+                    }
+                  ]
+                },
+                "functionAppConfig": {
+                  "deployment": {
+                    "storage": {
+                      "type": "blobContainer",
+                      "value": "[format('{0}{1}', reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2023-05-01').primaryEndpoints.blob, parameters('deploymentContainerName'))]",
+                      "authentication": {
+                        "type": "SystemAssignedIdentity"
+                      }
+                    }
+                  },
+                  "scaleAndConcurrency": {
+                    "maximumInstanceCount": "[parameters('maximumInstanceCount')]",
+                    "instanceMemoryMB": "[parameters('instanceMemoryMB')]"
+                  },
+                  "runtime": {
+                    "name": "dotnet-isolated",
+                    "version": "[parameters('runtimeVersion')]"
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/components', parameters('applicationInsightsName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', parameters('storageAccountName'), 'default', parameters('deploymentContainerName'))]",
+                "[resourceId('Microsoft.Web/serverfarms', parameters('planName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+              "name": "[parameters('hostStorageRoleAssignmentName')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageBlobDataOwnerRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-12-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', parameters('storageAccountName'), 'default', parameters('deploymentContainerName'))]",
+              "name": "[parameters('deploymentStorageRoleAssignmentName')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageBlobDataContributorRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-12-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', parameters('storageAccountName'), 'default', parameters('deploymentContainerName'))]",
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Insights/components', parameters('applicationInsightsName'))]",
+              "name": "[parameters('appInsightsRoleAssignmentName')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringMetricsPublisherRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-12-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/components', parameters('applicationInsightsName'))]",
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "functionAppResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+            },
+            "functionAppPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-12-01', 'full').identity.principalId]"
+            },
+            "functionAppDefaultHostName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-12-01').defaultHostName]"
+            },
+            "storageAccountResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "poc-teams-approval-bot",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "botName": {
+            "value": "[parameters('botName')]"
+          },
+          "botDisplayName": {
+            "value": "[parameters('botDisplayName')]"
+          },
+          "botMicrosoftAppId": {
+            "value": "[parameters('botMicrosoftAppId')]"
+          },
+          "botTenantId": {
+            "value": "[parameters('botTenantId')]"
+          },
+          "botMessagingEndpoint": {
+            "value": "[parameters('botMessagingEndpoint')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "2195950426736257262"
+            }
+          },
+          "parameters": {
+            "botName": {
+              "type": "string"
+            },
+            "botDisplayName": {
+              "type": "string"
+            },
+            "botMicrosoftAppId": {
+              "type": "string"
+            },
+            "botTenantId": {
+              "type": "string"
+            },
+            "botMessagingEndpoint": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.BotService/botServices",
+              "apiVersion": "2022-09-15",
+              "name": "[parameters('botName')]",
+              "location": "global",
+              "kind": "azurebot",
+              "sku": {
+                "name": "F0"
+              },
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "displayName": "[parameters('botDisplayName')]",
+                "endpoint": "[parameters('botMessagingEndpoint')]",
+                "msaAppId": "[parameters('botMicrosoftAppId')]",
+                "msaAppTenantId": "[parameters('botTenantId')]",
+                "msaAppType": "SingleTenant",
+                "iconUrl": "https://docs.botframework.com/static/devportal/client/images/bot-framework-default.png",
+                "schemaTransformationVersion": "1.3",
+                "isCmekEnabled": false,
+                "luisAppIds": []
+              }
+            },
+            {
+              "type": "Microsoft.BotService/botServices/channels",
+              "apiVersion": "2022-09-15",
+              "name": "[format('{0}/{1}', parameters('botName'), 'MsTeamsChannel')]",
+              "location": "global",
+              "properties": {
+                "channelName": "MsTeamsChannel",
+                "properties": {
+                  "isEnabled": true,
+                  "acceptedTerms": true,
+                  "enableCalling": false,
+                  "deploymentEnvironment": "CommercialDeployment",
+                  "incomingCallRoute": "graphPma"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.BotService/botServices', parameters('botName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "botResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.BotService/botServices', parameters('botName'))]"
+            },
+            "botName": {
+              "type": "string",
+              "value": "[parameters('botName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "functionAppResourceId": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'poc-teams-approval-platform'), '2025-04-01').outputs.functionAppResourceId.value]"
+    },
+    "functionAppPrincipalId": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'poc-teams-approval-platform'), '2025-04-01').outputs.functionAppPrincipalId.value]"
+    },
+    "storageAccountResourceId": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'poc-teams-approval-platform'), '2025-04-01').outputs.storageAccountResourceId.value]"
+    },
+    "botResourceId": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'poc-teams-approval-bot'), '2025-04-01').outputs.botResourceId.value]"
+    }
+  }
+}

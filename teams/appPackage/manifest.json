@@ -1,0 +1,35 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.30/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.30",
+  "version": "1.0.0",
+  "id": "831041ff-1d21-4a08-958e-02b17c10d7c2",
+  "developer": {
+    "name": "Diegolab POC",
+    "websiteUrl": "https://github.com/diegofernandes-dev/poc-teams-approval",
+    "privacyUrl": "https://github.com/diegofernandes-dev/poc-teams-approval/blob/main/teams/privacy.md",
+    "termsOfUseUrl": "https://github.com/diegofernandes-dev/poc-teams-approval/blob/main/teams/terms.md"
+  },
+  "name": {
+    "short": "ADO Approvals POC",
+    "full": "Azure DevOps Approvals via Teams POC"
+  },
+  "description": {
+    "short": "POC personal bot for Azure DevOps approvals via Teams.",
+    "full": "Hands-on proof of concept that installs the existing Azure Bot as a personal Microsoft Teams app. This package enables personal chat with the Approval Gateway Function only. Adaptive Cards, proactive messaging, and Azure DevOps approval integration are not part of this package and remain future slices."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#0078D4",
+  "bots": [
+    {
+      "botId": "5936429a-7889-45c1-983e-d9064aa7ee84",
+      "scopes": [
+        "personal"
+      ],
+      "isNotificationOnly": false
+    }
+  ],
+  "defaultInstallScope": "personal"
+}

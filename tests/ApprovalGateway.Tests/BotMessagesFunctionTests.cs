@@ -11,16 +11,15 @@ public sealed class BotMessagesFunctionTests
     [Fact]
     public async Task BotMessages_UnsupportedContentType_ReturnsUnsupportedMediaType()
     {
-        var function = new BotMessagesFunction(NullLogger<BotMessagesFunction>.Instance);
+        var function = new BotMessagesFunction(
+            NullLogger<BotMessagesFunction>.Instance,
+            Mock.Of<Microsoft.Agents.Hosting.AspNetCore.IAgentHttpAdapter>(),
+            Mock.Of<Microsoft.Agents.Builder.IAgent>());
         var context = new DefaultHttpContext();
         context.Request.ContentType = "text/plain";
         context.Request.Body = new MemoryStream("hello"u8.ToArray());
 
-        var result = await function.BotMessages(
-            context.Request,
-            Mock.Of<Microsoft.Agents.Hosting.AspNetCore.IAgentHttpAdapter>(),
-            Mock.Of<Microsoft.Agents.Builder.IAgent>(),
-            CancellationToken.None);
+        var result = await function.BotMessages(context.Request, CancellationToken.None);
 
         Assert.IsType<UnsupportedMediaTypeResult>(result);
     }

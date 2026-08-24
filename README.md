@@ -63,7 +63,8 @@ Completed:
 - Application Insights enabled.
 - Durable Task Scheduler disabled.
 - Azure OpenAI integration disabled.
-- **Application slice 1:** Bot Framework messaging gateway (`POST /api/messages`) implemented in code (not yet deployed).
+- **Application slice 1:** Bot Framework messaging gateway (`POST /api/messages`) implemented and validated end-to-end via Azure Bot Web Chat.
+- **Teams app package (personal):** minimum sideload package under [`teams/`](teams/) for installing the existing Azure Bot as a personal Teams app (manual upload; not published).
 
 Detailed execution notes are in [`docs/hands-on-progress.md`](docs/hands-on-progress.md).
 
@@ -224,7 +225,16 @@ After deploying the function package to `func-ado-teams-poc-diegolab`:
 
 - This slice does **not** register `IStorage` / `MemoryStorage`. `AgentApplicationOptions` falls back to a per-turn `MemoryStorage` when no `IStorage` is in DI. Register persisted storage later when conversation or approval state is introduced.
 
-### Not implemented in slice 1
+### Teams personal app package
+
+Minimum Teams app package for sideloading the existing Azure Bot as a **personal** app only. See [`teams/README.md`](teams/README.md).
+
+- Build: `./scripts/teams/build-app-package.sh` → `build/teams/ApprovalGateway.zip`
+- Teams App ID (manifest `id`) is distinct from the Azure Bot Microsoft App ID (`bots[].botId`)
+- Manual install only (no automatic publish/install in this slice)
+- Expected chat test: send `hello` → reply `Approval Gateway POC is online.`
+
+### Not implemented yet (future slices)
 
 - Azure DevOps REST API or Service Hooks
 - approval-pending / approval-completed handling
@@ -233,7 +243,6 @@ After deploying the function package to `func-ado-teams-poc-diegolab`:
 - conversation persistence / durable agent state
 - Cosmos DB, Table Storage, queues, Durable Functions
 - Graph API, approver lookup, Key Vault, APIM
-- Teams app manifest / installation
 - CI/CD pipeline
 - infrastructure changes (Bicep unchanged)
 

@@ -507,10 +507,46 @@ Scope delivered:
 
 Explicitly not implemented: Azure DevOps, Adaptive Cards, proactive messaging, persistence, CI/CD, Bicep changes.
 
-## 19. Next checkpoint
+## 19. Next checkpoint (historical)
 
 Deploy the function package to `func-ado-teams-poc-diegolab`, configure Function App settings and the Azure Bot messaging endpoint, then validate round-trip connectivity via Web Chat or Teams.
 
 After Bot connectivity is confirmed, proceed to proactive Teams messaging and Azure DevOps Service Hook integration in subsequent slices.
 
 The walkthrough must continue one validated checkpoint at a time.
+
+## 20. Teams personal app package
+
+Created the minimum Microsoft Teams app package to install the existing Azure Bot as a personal Teams app.
+
+Delivered:
+
+- `teams/appPackage/manifest.json` — unified manifest schema **1.30**; personal bot only
+- Teams App ID (new): `831041ff-1d21-4a08-958e-02b17c10d7c2`
+- Bot App ID referenced: `5936429a-7889-45c1-983e-d9064aa7ee84`
+- Bot scopes: `personal` only (no `team` / `groupChat`)
+- No `permissions`, Graph, SSO (`webApplicationInfo`), tabs, or compose extensions
+- `validDomains` omitted (bot-only; no tabs/SSO/OAuth)
+- POC icons: `color.png` 192×192, `outline.png` 32×32
+- Build script: `scripts/teams/build-app-package.sh` → `build/teams/ApprovalGateway.zip`
+- Docs: `teams/README.md`, `teams/privacy.md`, `teams/terms.md`
+
+Validated locally:
+
+- manifest JSON syntax
+- icons dimensions
+- ZIP root layout (`manifest.json`, `color.png`, `outline.png`)
+- JSON Schema Draft 4 validation against Microsoft Teams schema v1.30
+
+Not done in this slice: sideload/upload to Teams, Adaptive Cards, proactive messaging, Azure DevOps Service Hooks, Azure resource changes, commit/push.
+
+### Expected manual test (after sideload)
+
+1. Upload `build/teams/ApprovalGateway.zip` as a custom app.
+2. Open the personal app.
+3. Send `hello`.
+4. Expect: `Approval Gateway POC is online.`
+
+## 21. Next checkpoint
+
+Manually sideload the Teams package in a tenant that allows custom apps, confirm personal chat round-trip, then proceed to Adaptive Cards / proactive messaging and Azure DevOps integration in later slices.

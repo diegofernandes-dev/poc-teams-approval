@@ -11,6 +11,8 @@ public static class BotConfiguration
     public const string ClientIdKey = "Connections:ServiceConnection:Settings:ClientId";
     public const string ClientSecretKey = "Connections:ServiceConnection:Settings:ClientSecret";
     public const string AuthorityEndpointKey = "Connections:ServiceConnection:Settings:AuthorityEndpoint";
+    public const string ScopesKey = "Connections:ServiceConnection:Settings:Scopes:0";
+    public const string DefaultBotFrameworkScope = "https://api.botframework.com/.default";
     public const string TokenValidationTenantIdKey = "TokenValidation:TenantId";
     public const string TokenValidationAudienceKey = "TokenValidation:Audiences:0";
 
@@ -38,6 +40,15 @@ public static class BotConfiguration
         if (!string.IsNullOrWhiteSpace(password))
         {
             overrides[ClientSecretKey] = password;
+        }
+
+        // MSAL client-credentials auth requires at least one scope. Ensure the Bot Framework
+        // default even when appsettings.json was not loaded by the Functions host.
+        var existingScope = configuration[ScopesKey];
+        if (string.IsNullOrWhiteSpace(existingScope)
+            && (!string.IsNullOrWhiteSpace(appId) || !string.IsNullOrWhiteSpace(configuration[ClientIdKey])))
+        {
+            overrides[ScopesKey] = DefaultBotFrameworkScope;
         }
 
         return overrides;
