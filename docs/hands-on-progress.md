@@ -383,7 +383,29 @@ The deployment output confirmed the same Function Managed Identity principal ID:
 
 and the existing Storage, Application Insights, Function App, plan, deployment container, and RBAC resources were included in the deployment output.
 
-The Azure baseline is therefore now reproducible and managed through Bicep for subsequent changes.
+### Post-adoption validation
+
+A second `what-if` was run after the successful adoption. It showed no resource creates or deletes. Remaining `Modify` predictions were limited to ARM expression/default-value noise, including:
+
+- concrete managed identity principal ID versus ARM `reference(...)` expression;
+- resolved deployment container URL versus its ARM expression;
+- Storage and Web App provider defaults.
+
+The Function App system-assigned Managed Identity was re-read and remained:
+
+```text
+674fdcac-734f-4d83-9d09-89aecbd8931e
+```
+
+The three required role assignments were revalidated after adoption and remained unchanged:
+
+```text
+Monitoring Metrics Publisher   74d3277c-6b9f-5dbd-a6b6-7d826a724d02
+Storage Blob Data Contributor  a83330cc-1a44-5356-bc7a-ec1ed00a8eae
+Storage Blob Data Owner        ac5dabde-0f09-58c2-b7f0-e7b5186c9961
+```
+
+The Azure infrastructure foundation is therefore considered closed and managed through Bicep for subsequent Azure-side changes.
 
 ## 15. Architecture constraints to preserve
 
@@ -418,7 +440,7 @@ The completed event will later be used to update/remove Adaptive Card actions wh
 
 ## 17. Current checkpoint
 
-Azure infrastructure foundation for the Approval Gateway is provisioned, validated, and adopted by Bicep.
+Azure infrastructure foundation for the Approval Gateway is provisioned, validated, adopted by Bicep, and post-adoption checks are complete.
 
 Validated:
 
@@ -427,20 +449,17 @@ Validated:
 - Storage Account exists;
 - deployment package container exists;
 - Application Insights exists and is workspace-based;
-- system-assigned Managed Identity exists;
-- Storage Blob Data Owner assignment exists;
-- deployment container Storage Blob Data Contributor assignment exists;
-- Application Insights Monitoring Metrics Publisher assignment exists;
-- Bicep adoption deployment completed successfully.
+- system-assigned Managed Identity exists and is unchanged after Bicep adoption;
+- Storage Blob Data Owner assignment exists and is unchanged;
+- deployment container Storage Blob Data Contributor assignment exists and is unchanged;
+- Application Insights Monitoring Metrics Publisher assignment exists and is unchanged;
+- Bicep adoption deployment completed successfully;
+- post-adoption `what-if` shows no create/delete operations.
 
 ## 18. Next checkpoint
 
-Perform post-adoption validation:
+Proceed to Azure Bot / Teams personal application setup.
 
-1. run `what-if` again after the successful deployment;
-2. confirm the Function App Managed Identity principal ID is unchanged;
-3. confirm the three RBAC role assignments remain present.
-
-After those checks, proceed to Azure Bot / Teams application setup.
+The immediate goal is to establish the Bot/Teams identity and validate the path required for a proactive personal message to the test approver before introducing Azure DevOps approval events.
 
 The walkthrough must continue one validated checkpoint at a time.
