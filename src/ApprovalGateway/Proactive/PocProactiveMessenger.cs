@@ -33,8 +33,13 @@ public sealed class PocProactiveMessenger
         _logger = logger;
     }
 
-    public async Task<PocProactiveSendResult> SendAsync(CancellationToken cancellationToken)
+    public Task<PocProactiveSendResult> SendAsync(CancellationToken cancellationToken) =>
+        SendTextAsync(ProactiveMessage, cancellationToken);
+
+    public async Task<PocProactiveSendResult> SendTextAsync(string text, CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+
         _logger.LogInformation("POC proactive send requested.");
 
         if (!_store.TryGet(out ConversationReference? reference) || reference is null)
@@ -59,7 +64,7 @@ public sealed class PocProactiveMessenger
                 reference,
                 async (turnContext, ct) =>
                 {
-                    await turnContext.SendActivityAsync(MessageFactory.Text(ProactiveMessage), ct);
+                    await turnContext.SendActivityAsync(MessageFactory.Text(text), ct);
                 },
                 cancellationToken);
 

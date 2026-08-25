@@ -1,3 +1,4 @@
+using ApprovalGateway.AzureDevOps;
 using ApprovalGateway.Configuration;
 using ApprovalGateway.Proactive;
 using Microsoft.Agents.Builder;
@@ -39,6 +40,7 @@ builder.Services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Cloud
 // Temporary POC-only in-memory conversation routing state (not durable / not authoritative).
 builder.Services.AddSingleton<IPocConversationReferenceStore, InMemoryPocConversationReferenceStore>();
 builder.Services.AddSingleton<PocProactiveMessenger>();
+builder.Services.AddSingleton<AdoApprovalPendingHandler>();
 builder.Services.AddAgentAspNetAuthentication(builder.Configuration);
 
 builder.UseMiddleware<ApprovalGateway.Functions.BotAuthenticationMiddleware>();
