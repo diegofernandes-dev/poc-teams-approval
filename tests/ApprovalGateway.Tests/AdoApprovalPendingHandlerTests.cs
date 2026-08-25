@@ -52,7 +52,7 @@ public sealed class AdoApprovalPendingHandlerTests
     public async Task HandleAsync_TargetEnvironmentWithConversation_Notifies()
     {
         var store = new InMemoryPocConversationReferenceStore();
-        store.Save(CreateReference());
+        await store.SaveAsync(CreateReference());
 
         var adapter = new Mock<IChannelAdapter>(MockBehavior.Strict);
         adapter

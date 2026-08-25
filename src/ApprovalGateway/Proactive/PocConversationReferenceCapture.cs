@@ -9,10 +9,11 @@ namespace ApprovalGateway.Proactive;
 /// </summary>
 public static class PocConversationReferenceCapture
 {
-    public static bool TryCapture(
+    public static async Task<bool> TryCaptureAsync(
         IActivity activity,
         IPocConversationReferenceStore store,
-        ILogger logger)
+        ILogger logger,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(activity);
         ArgumentNullException.ThrowIfNull(store);
@@ -34,7 +35,7 @@ public static class PocConversationReferenceCapture
             return false;
         }
 
-        store.Save(reference);
+        await store.SaveAsync(reference, cancellationToken);
 
         logger.LogInformation(
             "POC conversation reference captured/updated. ConversationId={ConversationId} ChannelId={ChannelId} ServiceUrlHost={ServiceUrlHost}",

@@ -42,7 +42,8 @@ public sealed class PocProactiveMessenger
 
         _logger.LogInformation("POC proactive send requested.");
 
-        if (!_store.TryGet(out ConversationReference? reference) || reference is null)
+        ConversationReference? reference = await _store.TryGetAsync(cancellationToken);
+        if (reference is null)
         {
             _logger.LogWarning("POC proactive send failed; no conversation reference captured.");
             return PocProactiveSendResult.NoConversationReference();

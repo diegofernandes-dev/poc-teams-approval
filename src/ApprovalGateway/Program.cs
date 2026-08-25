@@ -37,8 +37,20 @@ builder.AddAgent<ApprovalGateway.Bot.ApprovalGatewayAgent>();
 // Prefer GetRequiredService so worker constructor injection fails fast if the adapter is missing.
 builder.Services.AddSingleton<IAgentHttpAdapter>(sp => sp.GetRequiredService<CloudAdapter>());
 builder.Services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<CloudAdapter>());
-// Temporary POC-only in-memory conversation routing state (not durable / not authoritative).
-builder.Services.AddSingleton<IPocConversationReferenceStore, InMemoryPocConversationReferenceStore>();
+// Temporary POC routing state: Blob when AzureWebJobsStorage account is configured, else in-memory.
+string? storageAccountName = builder.Configuration["AzureWebJobsStorage:accountName"]
+    ?? builder.Configuration["AzureWebJobsStorage__accountName"];
+if (!string.IsNullOrWhiteSpace(storageAccountName))
+{
+    builder.Services.AddSingleton<IPocConversationReferenceStore>(sp =>
+        new BlobPocConversationReferenceStore(
+            storageAccountName,
+            sp.GetRequiredService<ILogger<BlobPocConversationReferenceStore>>()));
+}
+else
+{
+    builder.Services.AddSingleton<IPocConversationReferenceStore, InMemoryPocConversationReferenceStore>();
+}
 builder.Services.AddSingleton<PocProactiveMessenger>();
 builder.Services.AddSingleton<AdoApprovalPendingHandler>();
 builder.Services.AddAgentAspNetAuthentication(builder.Configuration);

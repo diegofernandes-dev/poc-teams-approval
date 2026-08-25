@@ -4,37 +4,45 @@ namespace ApprovalGateway.Proactive;
 
 /// <summary>
 /// In-memory POC routing state for a single personal Teams conversation reference.
-/// Lost on process restart, cold start, or scale-out. Do not use as production persistence.
+/// Used by unit tests and local runs without storage account configuration.
 /// </summary>
 public sealed class InMemoryPocConversationReferenceStore : IPocConversationReferenceStore
 {
     private readonly object _gate = new();
     private ConversationReference? _reference;
 
-    public void Save(ConversationReference reference)
+    public Task SaveAsync(ConversationReference reference, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reference);
+        cancellationToken.ThrowIfCancellationRequested();
 
         lock (_gate)
         {
             _reference = reference;
         }
+
+        return Task.CompletedTask;
     }
 
-    public bool TryGet(out ConversationReference? reference)
+    public Task<ConversationReference?> TryGetAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         lock (_gate)
         {
-            reference = _reference;
-            return reference is not null;
+            return Task.FromResult(_reference);
         }
     }
 
-    public void Clear()
+    public Task ClearAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         lock (_gate)
         {
             _reference = null;
         }
+
+        return Task.CompletedTask;
     }
 }

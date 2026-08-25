@@ -33,7 +33,7 @@ public sealed class PocProactiveFunctionTests
     public async Task PocProactive_WithCapturedReference_ReturnsOk()
     {
         var store = new InMemoryPocConversationReferenceStore();
-        store.Save(new ConversationReference
+        await store.SaveAsync(new ConversationReference
         {
             ChannelId = Channels.Msteams,
             ServiceUrl = "https://smba.trafficmanager.net/teams/",

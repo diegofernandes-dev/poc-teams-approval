@@ -131,7 +131,7 @@ public sealed class ApprovalGatewayAgentTests
             async (turnContext, cancellationToken) => await agent.OnTurnAsync(turnContext, cancellationToken),
             CancellationToken.None);
 
-        Assert.True(store.TryGet(out ConversationReference? reference));
+        ConversationReference? reference = await store.TryGetAsync();
         Assert.NotNull(reference);
         Assert.False(string.IsNullOrWhiteSpace(reference.Conversation?.Id));
         Assert.False(string.IsNullOrWhiteSpace(reference.ServiceUrl));
@@ -145,7 +145,7 @@ public sealed class ApprovalGatewayAgentTests
         var store = new InMemoryPocConversationReferenceStore();
         _ = await ProcessMessageAsync("ping", store);
 
-        Assert.False(store.TryGet(out _));
+        Assert.Null(await store.TryGetAsync());
     }
 
     private static async Task<IActivity?> ProcessMessageAsync(

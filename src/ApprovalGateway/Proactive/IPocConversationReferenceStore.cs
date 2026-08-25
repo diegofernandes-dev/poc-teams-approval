@@ -3,14 +3,14 @@ using Microsoft.Agents.Core.Models;
 namespace ApprovalGateway.Proactive;
 
 /// <summary>
-/// Temporary POC-only store for the last Teams personal conversation reference.
-/// Not authoritative; not durable across restarts/cold starts/scale-out.
+/// POC store for the last Teams personal conversation reference used for proactive notify.
+/// Durable across Function instances when backed by Blob; still not an approver directory.
 /// </summary>
 public interface IPocConversationReferenceStore
 {
-    void Save(ConversationReference reference);
+    Task SaveAsync(ConversationReference reference, CancellationToken cancellationToken = default);
 
-    bool TryGet(out ConversationReference? reference);
+    Task<ConversationReference?> TryGetAsync(CancellationToken cancellationToken = default);
 
-    void Clear();
+    Task ClearAsync(CancellationToken cancellationToken = default);
 }

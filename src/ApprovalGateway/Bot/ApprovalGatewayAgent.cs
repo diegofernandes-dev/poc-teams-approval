@@ -38,26 +38,25 @@ public sealed class ApprovalGatewayAgent : AgentApplication
         OnTurnError(OnTurnErrorAsync);
     }
 
-    private Task WelcomeMessageAsync(ITurnContext turnContext, ITurnState turnState, CancellationToken cancellationToken)
+    private async Task WelcomeMessageAsync(ITurnContext turnContext, ITurnState turnState, CancellationToken cancellationToken)
     {
         ActivityLogging.LogActivityMetadata(_logger, turnContext.Activity);
-        CaptureConversationReference(turnContext.Activity);
+        await CaptureConversationReferenceAsync(turnContext.Activity, cancellationToken);
 
         foreach (ChannelAccount member in turnContext.Activity.MembersAdded ?? [])
         {
             if (member.Id != turnContext.Activity.Recipient?.Id)
             {
-                return turnContext.SendActivityAsync(MessageFactory.Text(PocReplyMessage), cancellationToken);
+                await turnContext.SendActivityAsync(MessageFactory.Text(PocReplyMessage), cancellationToken);
+                return;
             }
         }
-
-        return Task.CompletedTask;
     }
 
     private async Task OnMessageAsync(ITurnContext turnContext, ITurnState turnState, CancellationToken cancellationToken)
     {
         ActivityLogging.LogActivityMetadata(_logger, turnContext.Activity);
-        CaptureConversationReference(turnContext.Activity);
+        await CaptureConversationReferenceAsync(turnContext.Activity, cancellationToken);
 
         if (IsCardCommand(turnContext.Activity.Text))
         {
@@ -82,7 +81,7 @@ public sealed class ApprovalGatewayAgent : AgentApplication
         object data,
         CancellationToken cancellationToken)
     {
-        return HandleKnownActionAsync(turnContext, PocApprovalCard.ApproveAction, data);
+        return HandleKnownActionAsync(turnContext, PocApprovalCard.ApproveAction, data, cancellationToken);
     }
 
     private Task<AdaptiveCardInvokeResponse> OnRejectActionAsync(
@@ -91,17 +90,17 @@ public sealed class ApprovalGatewayAgent : AgentApplication
         object data,
         CancellationToken cancellationToken)
     {
-        return HandleKnownActionAsync(turnContext, PocApprovalCard.RejectAction, data);
+        return HandleKnownActionAsync(turnContext, PocApprovalCard.RejectAction, data, cancellationToken);
     }
 
-    private Task<AdaptiveCardInvokeResponse> OnUnknownActionExecuteAsync(
+    private async Task<AdaptiveCardInvokeResponse> OnUnknownActionExecuteAsync(
         ITurnContext turnContext,
         ITurnState turnState,
         object data,
         CancellationToken cancellationToken)
     {
         ActivityLogging.LogActivityMetadata(_logger, turnContext.Activity);
-        CaptureConversationReference(turnContext.Activity);
+        await CaptureConversationReferenceAsync(turnContext.Activity, cancellationToken);
 
         string? reportedAction = TryReadActionIdentifier(data);
         _logger.LogWarning(
@@ -109,16 +108,17 @@ public sealed class ApprovalGatewayAgent : AgentApplication
             reportedAction ?? "(none)");
 
         // Untrusted payload must not drive approval decisions. Reject unknown actions safely.
-        return Task.FromResult(AdaptiveCardInvokeResponseFactory.BadRequest("Unsupported Adaptive Card action."));
+        return AdaptiveCardInvokeResponseFactory.BadRequest("Unsupported Adaptive Card action.");
     }
 
-    private Task<AdaptiveCardInvokeResponse> HandleKnownActionAsync(
+    private async Task<AdaptiveCardInvokeResponse> HandleKnownActionAsync(
         ITurnContext turnContext,
         string expectedAction,
-        object data)
+        object data,
+        CancellationToken cancellationToken = default)
     {
         ActivityLogging.LogActivityMetadata(_logger, turnContext.Activity);
-        CaptureConversationReference(turnContext.Activity);
+        await CaptureConversationReferenceAsync(turnContext.Activity, cancellationToken);
 
         // data.action is untrusted POC input used only for acknowledgement identity checks.
         string? payloadAction = TryReadActionIdentifier(data);
@@ -129,19 +129,22 @@ public sealed class ApprovalGatewayAgent : AgentApplication
                 "Adaptive Card action payload mismatched verb. ExpectedAction={ExpectedAction} PayloadAction={PayloadAction}",
                 expectedAction,
                 payloadAction);
-            return Task.FromResult(AdaptiveCardInvokeResponseFactory.BadRequest("Adaptive Card action payload mismatch."));
+            return AdaptiveCardInvokeResponseFactory.BadRequest("Adaptive Card action payload mismatch.");
         }
 
         _logger.LogInformation(
             "Adaptive Card action received. NormalizedAction={NormalizedAction}",
             expectedAction);
 
-        return Task.FromResult(
-            AdaptiveCardInvokeResponseFactory.Message(PocApprovalCard.AcknowledgementMessage(expectedAction)));
+        return AdaptiveCardInvokeResponseFactory.Message(PocApprovalCard.AcknowledgementMessage(expectedAction));
     }
 
-    private void CaptureConversationReference(IActivity activity) =>
-        PocConversationReferenceCapture.TryCapture(activity, _conversationReferenceStore, _logger);
+    private Task CaptureConversationReferenceAsync(IActivity activity, CancellationToken cancellationToken) =>
+        PocConversationReferenceCapture.TryCaptureAsync(
+            activity,
+            _conversationReferenceStore,
+            _logger,
+            cancellationToken);
 
     public static bool IsCardCommand(string? text) =>
         string.Equals(text?.Trim(), PocApprovalCard.CardCommand, StringComparison.OrdinalIgnoreCase);

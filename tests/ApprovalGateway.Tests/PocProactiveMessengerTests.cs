@@ -32,7 +32,7 @@ public sealed class PocProactiveMessengerTests
     {
         var reference = CreatePersonalReference();
         var store = new InMemoryPocConversationReferenceStore();
-        store.Save(reference);
+        await store.SaveAsync(reference);
 
         ConversationReference? continuedReference = null;
         string? continuedAudience = null;
@@ -76,7 +76,7 @@ public sealed class PocProactiveMessengerTests
     {
         var reference = CreatePersonalReference();
         var store = new InMemoryPocConversationReferenceStore();
-        store.Save(reference);
+        await store.SaveAsync(reference);
 
         IActivity? sentActivity = null;
         var adapter = new Mock<IChannelAdapter>(MockBehavior.Strict);
@@ -112,7 +112,7 @@ public sealed class PocProactiveMessengerTests
     }
 
     [Fact]
-    public void TryCapture_PersonalTeams_StoresRoutingFieldsOnly()
+    public async Task TryCapture_PersonalTeams_StoresRoutingFieldsOnly()
     {
         var store = new InMemoryPocConversationReferenceStore();
         var activity = MessageFactory.Text("secret user text that must not be stored as a body");
@@ -127,13 +127,14 @@ public sealed class PocProactiveMessengerTests
         activity.ChannelId = Channels.Msteams;
         activity.ServiceUrl = "https://smba.trafficmanager.net/amer/";
 
-        bool captured = PocConversationReferenceCapture.TryCapture(
+        bool captured = await PocConversationReferenceCapture.TryCaptureAsync(
             activity,
             store,
             NullLogger.Instance);
 
         Assert.True(captured);
-        Assert.True(store.TryGet(out ConversationReference? reference));
+        ConversationReference? reference = await store.TryGetAsync();
+        Assert.NotNull(reference);
         Assert.NotNull(reference);
         Assert.Equal("a:personal-1", reference.Conversation?.Id);
         Assert.Equal("https://smba.trafficmanager.net/amer/", reference.ServiceUrl);
@@ -143,7 +144,7 @@ public sealed class PocProactiveMessengerTests
     }
 
     [Fact]
-    public void TryCapture_GroupConversation_IsIgnored()
+    public async Task TryCapture_GroupConversation_IsIgnored()
     {
         var store = new InMemoryPocConversationReferenceStore();
         var activity = MessageFactory.Text("hello");
@@ -158,13 +159,13 @@ public sealed class PocProactiveMessengerTests
         activity.ChannelId = Channels.Msteams;
         activity.ServiceUrl = "https://smba.trafficmanager.net/teams/";
 
-        bool captured = PocConversationReferenceCapture.TryCapture(
+        bool captured = await PocConversationReferenceCapture.TryCaptureAsync(
             activity,
             store,
             NullLogger.Instance);
 
         Assert.False(captured);
-        Assert.False(store.TryGet(out _));
+        Assert.Null(await store.TryGetAsync());
     }
 
     private static PocProactiveMessenger CreateMessenger(
