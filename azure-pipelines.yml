@@ -1,0 +1,47 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: promoteToPrd
+    displayName: Promote to PRD
+    type: boolean
+    default: false
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: HML
+    displayName: HML
+    jobs:
+      - job: HML
+        displayName: Simulate HML deployment
+        steps:
+          - checkout: none
+
+          - script: |
+              echo "HML deployment completed."
+              echo "Build: $(Build.BuildNumber)"
+            displayName: Simulate HML deployment
+
+  - ${{ if eq(parameters.promoteToPrd, true) }}:
+      - stage: PRD
+        displayName: PRD
+        dependsOn: HML
+
+        jobs:
+          - deployment: DeployPRD
+            displayName: Simulate PRD deployment
+            environment: prd-teams-poc
+
+            strategy:
+              runOnce:
+                deploy:
+                  steps:
+                    - checkout: none
+                    - download: none
+
+                    - script: |
+                        echo "PRD environment approval passed."
+                        echo "Simulated PRD deployment."
+                      displayName: Simulate PRD deployment
