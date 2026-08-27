@@ -1,62 +1,86 @@
 # ADR-002 — Backstage is the change-request onramp
 
-- Status: Accepted
+- Status: **Accepted**
 - Date: 2026-08-27
 
 ## Context
 
-The platform needs a consistent developer entry point for creating a GMUD/change request before production promotion. The underlying change-management system may change over time.
+The platform needs a stable developer-facing entry point for production change requests without coupling that experience to SharePoint, Jira Service Management, ServiceNow, or another ITSM implementation.
 
-Backstage already provides a developer-facing portal, Software Catalog context, and Software Templates/Scaffolder workflows that can collect parameters and execute backend actions.
+Backstage is already the intended developer portal and can collect change-request data while deriving application metadata from the Software Catalog.
 
 ## Decision
 
-Backstage is the preferred developer onramp for creating a production change request.
+Backstage is the developer onramp for creating production change requests.
 
-For the MVP, use a Software Template / Scaffolder flow rather than building a full custom Backstage plugin first.
+For the MVP, use a Backstage Software Template / Scaffolder-based flow rather than building a full custom plugin first.
 
-The template collects only business/change information that cannot be safely derived from catalog or pipeline metadata. Where possible, Backstage derives application, owner, system, repository, pipeline, and team context from the Software Catalog.
-
-The template calls a platform-owned change-management API/action and receives a canonical `changeId`.
-
-Conceptually:
+The user-facing capability is conceptually:
 
 ```text
 Backstage
   -> Create Production Change
   -> Change Management API
-  -> provider.create(...)
+  -> provider adapter
   -> changeId
 ```
 
-The resulting `changeId` is the stable correlation key passed into the Azure DevOps production-promotion flow.
+The pipeline receives only the stable `changeId` correlation identifier. Provider-specific fields must not leak into pipeline contracts.
 
-The pipeline must not receive SharePoint-, Jira-, or ServiceNow-specific identifiers or copy the full GMUD document into pipeline variables.
+The initial Backstage form should derive whatever it reasonably can from catalog context, including application, owner/team, repository/pipeline links, and artifact metadata, and ask the user only for change-specific information such as summary, risk, deployment window, rollback plan, and supporting evidence.
 
-## MVP user flow
+## UI implementation contract
+
+The MVP visual design is defined by:
+
+- [`docs/ui/gmud-create-screen.md`](../ui/gmud-create-screen.md)
+- [`docs/ui/gmud-create-reference.jpg`](../ui/gmud-create-reference.jpg)
+
+The reference image is normative for the **overall composition, information hierarchy, section ordering, right-side approval summary, and primary actions**. Agents implementing the screen should preserve this layout unless an explicit ADR supersedes it.
+
+Backstage's existing theme/components should still be used instead of hard-coding screenshot pixels. The goal is visual and structural fidelity while remaining a maintainable Backstage UI.
+
+## MVP versus future evolution
+
+### MVP
+
+Use Scaffolder / form-driven creation with the documented layout and fields.
+
+### Future
+
+If change management becomes a first-class platform capability, evolve to a dedicated Backstage plugin exposing capabilities such as:
 
 ```text
-Developer opens Backstage
-  -> selects application/component
-  -> fills change summary, risk, rollback and requested window
-  -> Backstage creates change
-  -> receives changeId
-  -> production promotion is started with changeId
-  -> HML executes
-  -> PRD approvals begin
+Changes
+- My Changes
+- Pending CAB
+- Scheduled
+- Completed
+- Create Change
 ```
 
-Starting the pipeline from the same Backstage workflow is desirable but is not a prerequisite for proving the change contract. The critical contract is that PRD promotion carries a valid `changeId`.
-
-## Future evolution
-
-A dedicated Backstage Change Management plugin may later provide views such as My Changes, Pending CAB, Scheduled, Failed Deployments, and change timelines.
-
-That plugin is not required for the MVP. The Scaffolder is the initial onramp, not necessarily the final UI.
+The dedicated plugin must reuse the same Change Management API and canonical model rather than bypassing them.
 
 ## Consequences
 
-- Developers get one stable entry point even if the ITSM backend changes.
-- Backstage does not become the deployment approval authority.
-- The Backstage template must depend on the canonical change-management contract, not on SharePoint APIs directly.
-- A full plugin is deferred until the workflow proves useful enough to justify richer lifecycle UX.
+### Positive
+
+- Single developer experience regardless of ITSM backend.
+- Existing catalog metadata can reduce manual form entry.
+- Enables MVP delivery without prematurely building a large plugin.
+- Allows a later custom plugin without changing the domain contract.
+
+### Negative / risks
+
+- Scaffolder UX may eventually become limiting for richer lifecycle/status screens.
+- A full plugin may still be required after the MVP.
+- Catalog data quality directly affects form pre-population quality.
+
+## Non-decisions
+
+This ADR does not decide:
+
+- which ITSM provider is authoritative;
+- Teams delegated approval authentication;
+- CAB deferred scheduling implementation;
+- whether SharePoint is used in the MVP.
