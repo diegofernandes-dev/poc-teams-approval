@@ -36,10 +36,20 @@ public sealed class PocProactiveMessenger
     public Task<PocProactiveSendResult> SendAsync(CancellationToken cancellationToken) =>
         SendTextAsync(ProactiveMessage, cancellationToken);
 
-    public async Task<PocProactiveSendResult> SendTextAsync(string text, CancellationToken cancellationToken)
+    public Task<PocProactiveSendResult> SendTextAsync(string text, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        return SendActivityAsync(MessageFactory.Text(text), cancellationToken);
+    }
 
+    public Task<PocProactiveSendResult> SendAttachmentAsync(Attachment attachment, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(attachment);
+        return SendActivityAsync(MessageFactory.Attachment(attachment), cancellationToken);
+    }
+
+    private async Task<PocProactiveSendResult> SendActivityAsync(IActivity activity, CancellationToken cancellationToken)
+    {
         _logger.LogInformation("POC proactive send requested.");
 
         ConversationReference? reference = await _store.TryGetAsync(cancellationToken);
@@ -65,7 +75,7 @@ public sealed class PocProactiveMessenger
                 reference,
                 async (turnContext, ct) =>
                 {
-                    await turnContext.SendActivityAsync(MessageFactory.Text(text), ct);
+                    await turnContext.SendActivityAsync(activity, ct);
                 },
                 cancellationToken);
 

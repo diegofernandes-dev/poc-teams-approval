@@ -1,3 +1,4 @@
+using ApprovalGateway.Bot;
 using ApprovalGateway.Proactive;
 using Microsoft.Extensions.Logging;
 
@@ -49,6 +50,12 @@ public sealed class AdoApprovalPendingHandler
             return AdoApprovalPendingHandleResult.Ignored("environment_filter");
         }
 
+        if (string.IsNullOrWhiteSpace(pendingEvent.ApprovalId))
+        {
+            _logger.LogWarning("approval-pending missing ApprovalId; skipping Teams notification.");
+            return AdoApprovalPendingHandleResult.Accepted("notify_skipped_missing_approval_id", null);
+        }
+
         _logger.LogInformation(
             "Processing approval-pending. ApprovalId={ApprovalId} Environment={Environment} Stage={Stage} Pipeline={Pipeline} RunId={RunId}",
             pendingEvent.ApprovalId,
@@ -57,8 +64,19 @@ public sealed class AdoApprovalPendingHandler
             pendingEvent.PipelineName,
             pendingEvent.RunId);
 
-        string text = BuildNotificationText(pendingEvent);
-        PocProactiveSendResult sendResult = await _messenger.SendTextAsync(text, cancellationToken);
+        var cardModel = new AdoApprovalCardModel
+        {
+            ApprovalId = pendingEvent.ApprovalId,
+            PipelineName = pendingEvent.PipelineName,
+            EnvironmentName = pendingEvent.EnvironmentName ?? AdoServiceHookDefaults.TargetEnvironmentName,
+            StageName = pendingEvent.StageName,
+            RunLabel = pendingEvent.RunName
+                ?? (pendingEvent.RunId is int id ? $"#{id}" : null),
+        };
+
+        PocProactiveSendResult sendResult = await _messenger.SendAttachmentAsync(
+            AdoApprovalCard.CreateAttachment(cardModel),
+            cancellationToken);
 
         return sendResult.Status switch
         {
@@ -69,23 +87,6 @@ public sealed class AdoApprovalPendingHandler
             // Teams/gateway failure must leave Azure DevOps approval pending (never fail open).
             _ => AdoApprovalPendingHandleResult.Accepted("notify_failed", null, sendResult.Error),
         };
-    }
-
-    private static string BuildNotificationText(AdoApprovalPendingEvent pendingEvent)
-    {
-        string pipeline = pendingEvent.PipelineName ?? "(unknown pipeline)";
-        string stage = pendingEvent.StageName ?? "(unknown stage)";
-        string run = pendingEvent.RunName
-            ?? (pendingEvent.RunId is int id ? $"#{id}" : "(unknown run)");
-        string approval = pendingEvent.ApprovalId ?? "(unknown approval)";
-
-        return
-            $"Azure DevOps approval pending for {AdoServiceHookDefaults.TargetEnvironmentName}.\n" +
-            $"Pipeline: {pipeline}\n" +
-            $"Stage: {stage}\n" +
-            $"Run: {run}\n" +
-            $"ApprovalId: {approval}\n" +
-            "Approve or reject in Azure DevOps (Teams decision API not wired yet).";
     }
 }
 

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using ApprovalGateway.AzureDevOps;
 using ApprovalGateway.Bot;
 using ApprovalGateway.Proactive;
 using Microsoft.Agents.Builder.App;
@@ -8,6 +9,8 @@ using Microsoft.Agents.Builder.State;
 using Microsoft.Agents.Builder.Testing;
 using Microsoft.Agents.Core.Models;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Moq;
 
 namespace ApprovalGateway.Tests;
 
@@ -208,10 +211,19 @@ public sealed class ApprovalGatewayAgentTests
     private static ApprovalGatewayAgent CreateAgent(IPocConversationReferenceStore? store = null)
     {
         var options = new AgentApplicationOptions(() => new TurnState());
+        var adoOptions = Options.Create(new AdoApprovalsOptions { Pat = null });
+        var approvalsClient = new Mock<IAdoApprovalsClient>(MockBehavior.Strict);
+        approvalsClient.SetupGet(c => c.IsConfigured).Returns(false);
+        var decisions = new AdoApprovalDecisionService(
+            approvalsClient.Object,
+            adoOptions,
+            NullLogger<AdoApprovalDecisionService>.Instance);
+
         return new ApprovalGatewayAgent(
             options,
             NullLogger<ApprovalGatewayAgent>.Instance,
-            store ?? new InMemoryPocConversationReferenceStore());
+            store ?? new InMemoryPocConversationReferenceStore(),
+            decisions);
     }
 
     private static void PopulateConversation(IActivity activity)

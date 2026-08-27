@@ -53,6 +53,10 @@ else
 }
 builder.Services.AddSingleton<PocProactiveMessenger>();
 builder.Services.AddSingleton<AdoApprovalPendingHandler>();
+builder.Services.Configure<AdoApprovalsOptions>(
+    builder.Configuration.GetSection(AdoApprovalsOptions.SectionName));
+builder.Services.AddHttpClient<IAdoApprovalsClient, AdoApprovalsClient>();
+builder.Services.AddSingleton<AdoApprovalDecisionService>();
 builder.Services.AddAgentAspNetAuthentication(builder.Configuration);
 
 builder.UseMiddleware<ApprovalGateway.Functions.BotAuthenticationMiddleware>();

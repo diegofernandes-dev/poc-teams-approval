@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using ApprovalGateway.AzureDevOps;
 using ApprovalGateway.Proactive;
 using Microsoft.Agents.Builder;
 using Microsoft.Agents.Builder.App;
@@ -18,15 +19,18 @@ public sealed class ApprovalGatewayAgent : AgentApplication
 
     private readonly ILogger<ApprovalGatewayAgent> _logger;
     private readonly IPocConversationReferenceStore _conversationReferenceStore;
+    private readonly AdoApprovalDecisionService _approvalDecisions;
 
     public ApprovalGatewayAgent(
         AgentApplicationOptions options,
         ILogger<ApprovalGatewayAgent> logger,
-        IPocConversationReferenceStore conversationReferenceStore)
+        IPocConversationReferenceStore conversationReferenceStore,
+        AdoApprovalDecisionService approvalDecisions)
         : base(options)
     {
         _logger = logger;
         _conversationReferenceStore = conversationReferenceStore;
+        _approvalDecisions = approvalDecisions;
 
         OnConversationUpdate(ConversationUpdateEvents.MembersAdded, WelcomeMessageAsync);
         AdaptiveCards.OnActionExecute(PocApprovalCard.ApproveAction, OnApproveActionAsync);
@@ -120,8 +124,7 @@ public sealed class ApprovalGatewayAgent : AgentApplication
         ActivityLogging.LogActivityMetadata(_logger, turnContext.Activity);
         await CaptureConversationReferenceAsync(turnContext.Activity, cancellationToken);
 
-        // data.action is untrusted POC input used only for acknowledgement identity checks.
-        string? payloadAction = TryReadActionIdentifier(data);
+        string? payloadAction = TryReadActionIdentifier(data) ?? AdoApprovalCard.TryReadAction(data);
         if (payloadAction is not null &&
             !string.Equals(payloadAction, expectedAction, StringComparison.Ordinal))
         {
@@ -132,6 +135,34 @@ public sealed class ApprovalGatewayAgent : AgentApplication
             return AdaptiveCardInvokeResponseFactory.BadRequest("Adaptive Card action payload mismatch.");
         }
 
+        string? approvalIdHint = AdoApprovalCard.TryReadApprovalId(data);
+        if (!string.IsNullOrWhiteSpace(approvalIdHint))
+        {
+            TeamsCallerIdentity caller = TeamsCallerIdentity.FromActivity(turnContext.Activity);
+            AdoApprovalDecisionResult decision = await _approvalDecisions.DecideAsync(
+                approvalIdHint,
+                expectedAction,
+                caller,
+                cancellationToken);
+
+            if (!decision.Succeeded)
+            {
+                _logger.LogWarning(
+                    "ADO approval decision rejected. ApprovalId={ApprovalId} Action={Action} Error={Error}",
+                    approvalIdHint,
+                    expectedAction,
+                    decision.Error);
+                return AdaptiveCardInvokeResponseFactory.Message(
+                    decision.Error ?? "Unable to apply the approval decision in Azure DevOps.");
+            }
+
+            string message = decision.Status == "approved"
+                ? "Approved in Azure DevOps."
+                : "Rejected in Azure DevOps.";
+            return AdaptiveCardInvokeResponseFactory.Message(message);
+        }
+
+        // Legacy fake POC card path (no approvalId) — acknowledgement only.
         _logger.LogInformation(
             "Adaptive Card action received. NormalizedAction={NormalizedAction}",
             expectedAction);
