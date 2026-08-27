@@ -2,7 +2,7 @@ namespace ApprovalGateway.AzureDevOps;
 
 /// <summary>
 /// Configuration for Azure DevOps Approvals REST calls.
-/// PAT must belong to an identity permitted to update the Environment approval.
+/// Service PAT is used for read-only gateway operations only — never to apply approvals on behalf of users.
 /// </summary>
 public sealed class AdoApprovalsOptions
 {
@@ -13,7 +13,7 @@ public sealed class AdoApprovalsOptions
     public string Project { get; set; } = "platform-engineering";
 
     /// <summary>
-    /// Personal Access Token used for Approvals GET/PATCH. Prefer App Setting / Key Vault; never commit.
+    /// Personal Access Token used for Approvals read operations (GET). Prefer App Setting / Key Vault; never commit.
     /// </summary>
     public string? Pat { get; set; }
 

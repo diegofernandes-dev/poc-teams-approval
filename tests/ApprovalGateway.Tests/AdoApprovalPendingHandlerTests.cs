@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace ApprovalGateway.Tests;
@@ -119,6 +120,7 @@ public sealed class AdoApprovalPendingHandlerTests
 
         return new AdoApprovalPendingHandler(
             messenger,
+            Options.Create(new AdoApprovalsOptions()),
             NullLogger<AdoApprovalPendingHandler>.Instance);
     }
 }
@@ -180,6 +182,7 @@ public sealed class AdoApprovalPendingFunctionTests
 
         var handler = new AdoApprovalPendingHandler(
             messenger,
+            Options.Create(new AdoApprovalsOptions()),
             NullLogger<AdoApprovalPendingHandler>.Instance);
 
         return new AdoApprovalPendingFunction(

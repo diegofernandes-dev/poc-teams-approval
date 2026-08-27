@@ -34,6 +34,23 @@ public sealed class TeamsCallerIdentityTests
 
         Assert.True(caller.MatchesApprover(approver));
     }
+
+    [Fact]
+    public void MatchesApprover_ByDisplayName_WhenOidMissing()
+    {
+        var caller = new TeamsCallerIdentity
+        {
+            Name = "Approver POC",
+        };
+
+        var approver = new AdoIdentityRef
+        {
+            DisplayName = "Approver POC",
+            UniqueName = "approver@diegolab.onmicrosoft.com",
+        };
+
+        Assert.True(caller.MatchesApprover(approver));
+    }
 }
 
 public sealed class AdoApprovalDecisionServiceTests
@@ -80,11 +97,18 @@ public sealed class AdoApprovalDecisionServiceTests
 
         Assert.False(result.Succeeded);
         Assert.Contains("no longer pending", result.Error);
-        client.Verify(c => c.UpdateApprovalAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        client.Verify(
+            c => c.UpdateApprovalAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
-    public async Task DecideAsync_AssignedApprover_UpdatesAdo()
+    public async Task DecideAsync_AssignedApprover_RequiresDelegatedAuth()
     {
         string approvalId = Guid.NewGuid().ToString();
         string aadObjectId = "dd6363d3-758d-7a20-9859-067c4402f7bf";
@@ -110,8 +134,6 @@ public sealed class AdoApprovalDecisionServiceTests
                     },
                 ],
             });
-        client.Setup(c => c.UpdateApprovalAsync(approvalId, "approved", It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(AdoApprovalUpdateResult.Ok());
 
         var service = new AdoApprovalDecisionService(
             client.Object,
@@ -124,15 +146,42 @@ public sealed class AdoApprovalDecisionServiceTests
             new TeamsCallerIdentity { AadObjectId = aadObjectId },
             CancellationToken.None);
 
-        Assert.True(result.Succeeded);
-        Assert.Equal("approved", result.Status);
+        Assert.False(result.Succeeded);
+        Assert.Contains("Azure DevOps link", result.Error);
+        client.Verify(
+            c => c.UpdateApprovalAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+}
+
+public sealed class AdoApprovalUrlsTests
+{
+    [Fact]
+    public void BuildRunResultsUrl_BuildsExpectedLink()
+    {
+        string? url = AdoApprovalUrls.BuildRunResultsUrl("diegolab", "platform-engineering", 128);
+
+        Assert.Equal(
+            "https://dev.azure.com/diegolab/platform-engineering/_build/results?buildId=128",
+            url);
+    }
+
+    [Fact]
+    public void BuildRunResultsUrl_ReturnsNullWhenRunMissing()
+    {
+        Assert.Null(AdoApprovalUrls.BuildRunResultsUrl("diegolab", "platform-engineering", null));
     }
 }
 
 public sealed class AdoApprovalCardTests
 {
     [Fact]
-    public void CreateAttachment_IncludesApprovalIdInActionData()
+    public void CreateAttachment_IncludesApprovalDetailsAndOpenUrl()
     {
         var attachment = AdoApprovalCard.CreateAttachment(new AdoApprovalCardModel
         {
@@ -141,12 +190,16 @@ public sealed class AdoApprovalCardTests
             EnvironmentName = "prd-teams-poc",
             StageName = "PRD",
             RunLabel = "20260825.5",
+            ApprovalUrl = "https://dev.azure.com/diegolab/platform-engineering/_build/results?buildId=128",
         });
 
         Assert.Equal(AdoApprovalCard.ContentType, attachment.ContentType);
         string json = System.Text.Json.JsonSerializer.Serialize(attachment.Content);
         Assert.Contains("11111111-1111-1111-1111-111111111111", json);
         Assert.Contains("prd-teams-poc", json);
+        Assert.Contains("Action.OpenUrl", json);
+        Assert.Contains("buildId=128", json);
+        Assert.DoesNotContain("Action.Execute", json);
     }
 
     [Fact]

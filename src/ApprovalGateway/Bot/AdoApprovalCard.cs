@@ -7,6 +7,7 @@ namespace ApprovalGateway.Bot;
 /// <summary>
 /// Adaptive Card for a real Azure DevOps Environment approval pending notification.
 /// Card <c>data.approvalId</c> is an untrusted correlation hint only.
+/// Approval is applied in Azure DevOps with the user's own session — not via a gateway service account.
 /// </summary>
 public static class AdoApprovalCard
 {
@@ -27,57 +28,78 @@ public static class AdoApprovalCard
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrWhiteSpace(model.ApprovalId);
 
+        var body = new JsonArray
+        {
+            new JsonObject
+            {
+                ["type"] = "TextBlock",
+                ["text"] = "Production deployment approval",
+                ["weight"] = "Bolder",
+                ["size"] = "Medium",
+                ["wrap"] = true,
+            },
+            new JsonObject
+            {
+                ["type"] = "FactSet",
+                ["facts"] = new JsonArray
+                {
+                    Fact("Pipeline", model.PipelineName ?? "(unknown)"),
+                    Fact("Environment", model.EnvironmentName ?? "(unknown)"),
+                    Fact("Stage", model.StageName ?? "(unknown)"),
+                    Fact("Run", model.RunLabel ?? "(unknown)"),
+                    Fact("Approval", model.ApprovalId),
+                },
+            },
+            new JsonObject
+            {
+                ["type"] = "TextBlock",
+                ["text"] = "Azure DevOps is the approval authority. Open the run below and approve or reject with your own account.",
+                ["wrap"] = true,
+                ["isSubtle"] = true,
+                ["size"] = "Small",
+            },
+        };
+
+        JsonArray? actions = BuildActions(model.ApprovalUrl);
+        if (actions is not null)
+        {
+            body.Add(new JsonObject
+            {
+                ["type"] = "ActionSet",
+                ["actions"] = actions,
+            });
+        }
+
         return new JsonObject
         {
             ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
             ["type"] = "AdaptiveCard",
             ["version"] = SchemaVersion,
-            ["body"] = new JsonArray
-            {
-                new JsonObject
-                {
-                    ["type"] = "TextBlock",
-                    ["text"] = "Production deployment approval",
-                    ["weight"] = "Bolder",
-                    ["size"] = "Medium",
-                    ["wrap"] = true,
-                },
-                new JsonObject
-                {
-                    ["type"] = "FactSet",
-                    ["facts"] = new JsonArray
-                    {
-                        Fact("Pipeline", model.PipelineName ?? "(unknown)"),
-                        Fact("Environment", model.EnvironmentName ?? "(unknown)"),
-                        Fact("Stage", model.StageName ?? "(unknown)"),
-                        Fact("Run", model.RunLabel ?? "(unknown)"),
-                        Fact("Approval", model.ApprovalId),
-                    },
-                },
-                new JsonObject
-                {
-                    ["type"] = "TextBlock",
-                    ["text"] = "Azure DevOps remains the approval authority. Buttons re-validate state before applying.",
-                    ["wrap"] = true,
-                    ["isSubtle"] = true,
-                    ["size"] = "Small",
-                },
-                new JsonObject
-                {
-                    ["type"] = "ActionSet",
-                    ["actions"] = new JsonArray
-                    {
-                        ExecuteAction("Approve", ApproveAction, model.ApprovalId),
-                        ExecuteAction("Reject", RejectAction, model.ApprovalId),
-                    },
-                },
-            },
+            ["body"] = body,
         };
     }
 
     public static string? TryReadApprovalId(object? data) => TryReadString(data, "approvalId");
 
     public static string? TryReadAction(object? data) => TryReadString(data, "action");
+
+    private static JsonArray? BuildActions(string? approvalUrl)
+    {
+        if (string.IsNullOrWhiteSpace(approvalUrl))
+        {
+            return null;
+        }
+
+        return new JsonArray
+        {
+            new JsonObject
+            {
+                ["type"] = "Action.OpenUrl",
+                ["title"] = "Review in Azure DevOps",
+                ["url"] = approvalUrl,
+            },
+        };
+    }
 
     private static string? TryReadString(object? data, string propertyName)
     {
@@ -122,19 +144,6 @@ public static class AdoApprovalCard
             ["title"] = title,
             ["value"] = value,
         };
-
-    private static JsonObject ExecuteAction(string title, string action, string approvalId) =>
-        new()
-        {
-            ["type"] = "Action.Execute",
-            ["title"] = title,
-            ["verb"] = action,
-            ["data"] = new JsonObject
-            {
-                ["action"] = action,
-                ["approvalId"] = approvalId,
-            },
-        };
 }
 
 public sealed class AdoApprovalCardModel
@@ -148,4 +157,6 @@ public sealed class AdoApprovalCardModel
     public string? StageName { get; init; }
 
     public string? RunLabel { get; init; }
+
+    public string? ApprovalUrl { get; init; }
 }

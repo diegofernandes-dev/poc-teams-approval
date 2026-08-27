@@ -101,29 +101,14 @@ public sealed class AdoApprovalDecisionService
             return AdoApprovalDecisionResult.Failed("You are not an assigned approver for this Environment.");
         }
 
-        string comment = action == "approve"
-            ? "Approved from Microsoft Teams (Approval Gateway POC)."
-            : "Rejected from Microsoft Teams (Approval Gateway POC).";
-
-        AdoApprovalUpdateResult update = await _client.UpdateApprovalAsync(
-            approvalIdHint,
-            adoStatus,
-            comment,
-            cancellationToken);
-
-        if (!update.Succeeded)
-        {
-            return AdoApprovalDecisionResult.Failed(
-                update.Error ?? "Azure DevOps rejected the approval update.");
-        }
-
         _logger.LogInformation(
-            "Azure DevOps approval updated from Teams. ApprovalId={ApprovalId} Status={Status} AadObjectId={AadObjectId}",
-            approvalIdHint,
-            adoStatus,
+            "Approval action validated; delegated auth required to apply. ApprovalId={ApprovalId} Action={Action} AadObjectId={AadObjectId}",
+            approval.Id,
+            action,
             caller.AadObjectId);
 
-        return AdoApprovalDecisionResult.Ok(adoStatus);
+        return AdoApprovalDecisionResult.Failed(
+            "Use the Azure DevOps link on the card to approve or reject with your own account.");
     }
 }
 

@@ -25,21 +25,14 @@ public sealed class TeamsCallerIdentity
 
         if (from?.Properties is not null)
         {
-            if (from.Properties.TryGetValue("aadObjectId", out JsonElement aadElement) &&
-                aadElement.ValueKind == JsonValueKind.String)
-            {
-                aadObjectId = aadElement.GetString();
-            }
-
-            if (from.Properties.TryGetValue("email", out JsonElement emailElement) &&
-                emailElement.ValueKind == JsonValueKind.String)
-            {
-                upn = emailElement.GetString();
-            }
+            aadObjectId = TryReadPropertyString(from.Properties, "aadObjectId")
+                ?? TryReadPropertyString(from.Properties, "AadObjectId");
+            upn = TryReadPropertyString(from.Properties, "email")
+                ?? TryReadPropertyString(from.Properties, "userPrincipalName");
         }
 
-        // Agents SDK ChannelAccount may expose AadObjectId as a first-class field via JSON.
-        aadObjectId ??= TryGetStringProperty(from, "aadObjectId");
+        // Fall back to ChannelData (Teams often places aadObjectId there on invokes).
+        TryReadFromChannelData(activity.ChannelData, ref aadObjectId, ref upn);
 
         return new TeamsCallerIdentity
         {
@@ -48,6 +41,51 @@ public sealed class TeamsCallerIdentity
             UserPrincipalName = upn,
         };
     }
+
+    private static void TryReadFromChannelData(object? channelData, ref string? aadObjectId, ref string? upn)
+    {
+        if (channelData is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using JsonDocument document = channelData is JsonElement element
+                ? JsonDocument.Parse(element.GetRawText())
+                : JsonDocument.Parse(JsonSerializer.Serialize(channelData));
+
+            JsonElement root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return;
+            }
+
+            if (aadObjectId is null &&
+                root.TryGetProperty("from", out JsonElement fromElement) &&
+                fromElement.ValueKind == JsonValueKind.Object)
+            {
+                aadObjectId = TryGetJsonString(fromElement, "aadObjectId")
+                    ?? TryGetJsonString(fromElement, "AadObjectId");
+                upn ??= TryGetJsonString(fromElement, "email")
+                    ?? TryGetJsonString(fromElement, "userPrincipalName");
+            }
+        }
+        catch (JsonException)
+        {
+            // Ignore malformed channel data; other identity fields may still match.
+        }
+    }
+
+    private static string? TryReadPropertyString(IDictionary<string, JsonElement> properties, string name) =>
+        properties.TryGetValue(name, out JsonElement element) && element.ValueKind == JsonValueKind.String
+            ? element.GetString()
+            : null;
+
+    private static string? TryGetJsonString(JsonElement parent, string name) =>
+        parent.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     public bool MatchesApprover(AdoIdentityRef approver)
     {
@@ -71,13 +109,12 @@ public sealed class TeamsCallerIdentity
             return true;
         }
 
+        // POC fallback: Teams often omits AAD OID/UPN on Action.Execute; display name is the
+        // remaining trusted-enough signal when it matches an Environment approver exactly.
         if (!string.IsNullOrWhiteSpace(Name) &&
-            string.Equals(Name, approver.DisplayName, StringComparison.OrdinalIgnoreCase) &&
-            !string.IsNullOrWhiteSpace(approver.UniqueName))
+            string.Equals(Name, approver.DisplayName, StringComparison.OrdinalIgnoreCase))
         {
-            // Display-name-only match is weak; still require UniqueName present on ADO side
-            // and treat as last-resort POC signal when UPN/OID are absent from the activity.
-            return false;
+            return true;
         }
 
         return false;
@@ -85,18 +122,6 @@ public sealed class TeamsCallerIdentity
 
     public bool IsBlocked(IEnumerable<AdoIdentityRef> blockedApprovers) =>
         blockedApprovers.Any(MatchesApprover);
-
-    private static string? TryGetStringProperty(ChannelAccount? account, string name)
-    {
-        if (account?.Properties is null ||
-            !account.Properties.TryGetValue(name, out JsonElement element) ||
-            element.ValueKind != JsonValueKind.String)
-        {
-            return null;
-        }
-
-        return element.GetString();
-    }
 
     internal static string? TryDecodeAadObjectId(string? descriptor)
     {

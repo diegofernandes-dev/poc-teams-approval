@@ -1,6 +1,7 @@
 using ApprovalGateway.Bot;
 using ApprovalGateway.Proactive;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace ApprovalGateway.AzureDevOps;
 
@@ -11,13 +12,16 @@ namespace ApprovalGateway.AzureDevOps;
 public sealed class AdoApprovalPendingHandler
 {
     private readonly PocProactiveMessenger _messenger;
+    private readonly AdoApprovalsOptions _options;
     private readonly ILogger<AdoApprovalPendingHandler> _logger;
 
     public AdoApprovalPendingHandler(
         PocProactiveMessenger messenger,
+        IOptions<AdoApprovalsOptions> options,
         ILogger<AdoApprovalPendingHandler> logger)
     {
         _messenger = messenger;
+        _options = options.Value;
         _logger = logger;
     }
 
@@ -72,6 +76,10 @@ public sealed class AdoApprovalPendingHandler
             StageName = pendingEvent.StageName,
             RunLabel = pendingEvent.RunName
                 ?? (pendingEvent.RunId is int id ? $"#{id}" : null),
+            ApprovalUrl = AdoApprovalUrls.BuildRunResultsUrl(
+                _options.Organization,
+                _options.Project,
+                pendingEvent.RunId),
         };
 
         PocProactiveSendResult sendResult = await _messenger.SendAttachmentAsync(

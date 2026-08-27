@@ -19,6 +19,7 @@ public interface IAdoApprovalsClient
         string approvalId,
         string status,
         string comment,
+        string accessToken,
         CancellationToken cancellationToken);
 }
 
@@ -202,11 +203,12 @@ public sealed class AdoApprovalsClient : IAdoApprovalsClient
         string approvalId,
         string status,
         string comment,
+        string accessToken,
         CancellationToken cancellationToken)
     {
-        EnsureConfigured();
         ArgumentException.ThrowIfNullOrWhiteSpace(approvalId);
         ArgumentException.ThrowIfNullOrWhiteSpace(status);
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
 
         var payload = new[]
         {
@@ -218,9 +220,10 @@ public sealed class AdoApprovalsClient : IAdoApprovalsClient
             },
         };
 
-        using HttpRequestMessage request = CreateRequest(
+        using HttpRequestMessage request = CreateBearerRequest(
             HttpMethod.Patch,
-            $"https://dev.azure.com/{_options.Organization}/{Uri.EscapeDataString(_options.Project)}/_apis/pipelines/approvals?api-version=7.1");
+            $"https://dev.azure.com/{_options.Organization}/{Uri.EscapeDataString(_options.Project)}/_apis/pipelines/approvals?api-version=7.1",
+            accessToken);
         request.Content = new StringContent(
             JsonSerializer.Serialize(payload),
             Encoding.UTF8,
@@ -247,6 +250,14 @@ public sealed class AdoApprovalsClient : IAdoApprovalsClient
         var request = new HttpRequestMessage(method, url);
         byte[] token = Encoding.ASCII.GetBytes($":{_options.Pat}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(token));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        return request;
+    }
+
+    private static HttpRequestMessage CreateBearerRequest(HttpMethod method, string url, string accessToken)
+    {
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return request;
     }

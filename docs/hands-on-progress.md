@@ -671,3 +671,43 @@ func azure functionapp publish func-ado-teams-poc-diegolab --dotnet-isolated
 ## 25. Next checkpoint
 
 Deploy proactive slice, validate personal chat capture + Function-key trigger end-to-end, then proceed to Azure DevOps Service Hook integration.
+
+## 26. Azure DevOps Service Hook + Adaptive Card notification (proven)
+
+Implemented and validated end-to-end:
+
+- Service Hook event: `ms.vss-pipelinechecks-events.approval-pending`
+- Filter: Environment `prd-teams-poc`
+- Function: `POST /api/webhooks/ado/approval-pending` (Function key)
+- Proactive Adaptive Card to personal Teams chat (conversation reference in Blob)
+- Pipeline compile-time PRD gate validated (HML-only vs `promoteToPrd=true`)
+
+## 27. In-Teams Approve via service PAT — identity failure
+
+Attempted `PATCH /_apis/pipelines/approvals` using gateway service PAT after validating the Teams caller against Environment approvers.
+
+Result:
+
+- Approval succeeded in ADO
+- Audit attributed the action to the **PAT owner** (Diego), not the Teams clicker (Approver POC)
+
+Conclusion: ADO records the authenticated token identity. A service PAT cannot honestly approve “as” another human.
+
+Per-approver PATs in App Settings were considered and **rejected** (credential custody / scale).
+
+## 28. Current safe posture — deep link (awaiting architect decision)
+
+Corrected behavior (code + deployed Function):
+
+- Real approval card uses **`Action.OpenUrl`** → Review in Azure DevOps (run results URL)
+- Gateway does **not** apply approvals with the service PAT
+- Service PAT reserved for read-only ADO calls when needed
+- `UpdateApprovalAsync` accepts a Bearer access token parameter for a future delegated-auth slice
+
+Architect decision brief (options A deep link / B Teams SSO+OBO / C hybrid):
+
+[`docs/architect-decision-teams-approval-identity.md`](architect-decision-teams-approval-identity.md)
+
+## 29. Next checkpoint
+
+Architect chooses A, B, or C in the decision brief. Engineering proceeds only after that choice.

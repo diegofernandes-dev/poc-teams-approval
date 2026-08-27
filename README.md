@@ -23,15 +23,11 @@ Azure Function / Approval Gateway
 Microsoft Teams personal message
         |
 Adaptive Card
-[Approve] [Reject]
+[Review in Azure DevOps]   ← current (correct identity)
+[Approve] [Reject]         ← future: only with user-delegated ADO token (SSO/OBO)
         |
         v
-Azure Function
-        |
-Azure DevOps REST API
-        |
-        v
-Approval approved/rejected
+Approval applied in Azure DevOps as the human approver
 ```
 
 Teams is only the approval user interface. Azure DevOps remains authoritative.
@@ -48,27 +44,20 @@ Only an explicit production promotion should create the PRD approval flow.
 
 ## Current status
 
-The POC foundation is in progress.
+The POC foundation and the ADO → Teams notification path are largely proven. **In-Teams Approve/Reject with correct ADO audit identity is blocked pending architect decision** — see [`docs/architect-decision-teams-approval-identity.md`](docs/architect-decision-teams-approval-identity.md).
 
 Completed:
 
-- Azure subscription validated in the POC tenant.
-- Monthly cost budget configured.
-- Resource group created in `East US 2`.
-- Azure Function App creation started using Flex Consumption.
-- Function runtime selected as `.NET 10 (Isolated)`.
-- Function instance size selected as `512 MB` for the POC.
-- Public inbound access enabled for the POC.
-- VNet integration disabled for the POC.
-- Application Insights enabled.
-- Durable Task Scheduler disabled.
-- Azure OpenAI integration disabled.
-- **Application slice 1:** Bot Framework messaging gateway (`POST /api/messages`) implemented and validated end-to-end via Azure Bot Web Chat.
-- **Teams personal chat:** Teams app published/installed in the POC tenant; personal chat validated end-to-end (Teams → Azure Bot → Function → reply).
-- **Application slice — Adaptive Card actions:** fake POC Adaptive Card with `Action.Execute` Approve/Reject; invoke acknowledgements only (no Azure DevOps calls). **Deployed** to `func-ado-teams-poc-diegolab`.
-- **Application slice — proactive personal messaging:** capture Teams personal `ConversationReference` in temporary in-memory POC state; send plain-text proactive message via `POST /api/poc/proactive` (Function key). **Implemented locally; not deployed in this slice.**
+- Azure subscription, budget, resource group, Function App (Flex Consumption, `.NET 10` isolated), Application Insights.
+- **Bot messaging gateway** (`POST /api/messages`) validated via Azure Bot + Teams personal chat.
+- **Adaptive Card actions** (fake POC card) and **proactive personal messaging**.
+- **Conversation reference persistence** in Blob Storage (Flex-safe).
+- **ADO Service Hook** `approval-pending` → Function → Teams Adaptive Card for `prd-teams-poc`.
+- **Pipeline** with compile-time PRD gate (`promoteToPrd`); HML-only vs PRD promotion validated.
+- **Identity finding:** service PAT PATCH attributes the approval to the PAT owner (wrong user in audit). Gateway **no longer applies** approvals with a service account; card deep-links to Azure DevOps until SSO/OBO (or equivalent) is approved.
 
-Detailed execution notes are in [`docs/hands-on-progress.md`](docs/hands-on-progress.md).
+Detailed execution notes: [`docs/hands-on-progress.md`](docs/hands-on-progress.md).  
+Architect decision brief: [`docs/architect-decision-teams-approval-identity.md`](docs/architect-decision-teams-approval-identity.md).
 
 ## Application (slice 1 — Bot messaging gateway)
 
