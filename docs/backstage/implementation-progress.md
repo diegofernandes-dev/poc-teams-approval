@@ -1,0 +1,278 @@
+# GMUD — Backstage implementation progress
+
+> **Bridge repository:** `diegofernandes-dev/poc-teams-approval` — architectural handoff (this document)  
+> **Implementation repository (ADO):** `platform-devops-developer-portal` — authoritative source code  
+> **Checkpoint:** F1.3 — Functional & semantic UX review (complete)  
+> **Prior checkpoints:** F1 (frontend shell) · F1.1 (visual polish) · F1.2 (Backstage-first composition)  
+> **UI reference:** [`gmud-create-reference.jpg`](../ui/gmud-create-reference.jpg) · [`gmud-create-screen.md`](../ui/gmud-create-screen.md)  
+> **Status:** F1.3 complete — **STOP** before F2 backend (domain model review gate)
+>
+> **Note:** ADO file paths in section 3 are **implementation references** in the Azure DevOps repository, not paths in this bridge repo.
+
+---
+
+## 1. Checkpoint summary
+
+### F1 (functional shell)
+
+F1 delivers a first-class frontend plugin for GMUD (Gestão de Mudanças) with:
+
+- Route `/gmud` registered via the new Backstage frontend system
+- Provider-agnostic `ChangeManagementApi` boundary with mock implementation
+- Catalog- and identity-driven form context (component picker, requester, owner, evidence)
+- Curated sidebar placement in the developer workflow section
+- Automated tests for plugin wiring, API boundary, catalog context, and navigation
+
+### F1.1 / F1.2 (visual composition)
+
+Visual refinement only — no backend, persistence, or provider integration:
+
+- Shared `useGmudCreateStyles` vocabulary (form surface, context fields, rail, actions)
+- Controlled content width (max 1440) and ~76/24 main/rail columns
+- Single form InfoCard surface with numbered sections (not four elevated cards)
+- Backstage/MUI outlined controls; read-only context via `GmudContextField`
+- Quiet right-rail cards (Fluxo, Status, Identificador)
+
+### F1.3 (functional & semantic UX review)
+
+F1.3 reframes the screen from **application deployment** to **generic production change management**. No backend, API expansion, or provider wiring.
+
+#### Domain language changes
+
+| Before (F1.2) | After (F1.3) | Rationale |
+|---------------|--------------|-----------|
+| Aplicação | **Alvo da mudança** | GMUD target is not limited to applications |
+| Ambiente = PRD | **Removed** | Production is implicit on this screen |
+| Versão / Artefato | **Removed** | Deployment-specific; not universal |
+| Owner do sistema | **Responsável** | Clearer governance label; still `spec.owner` internally |
+| Janela de Implantação | **Janela de Execução** | Generic execution window |
+| Risco e Reversão (3/9 grid) | **Avaliação de Risco** (stacked) | Intentional hierarchy; reversal is a full-width field |
+| Plano de rollback | **Plano de reversão** | Works for infra/DB/manual changes |
+| Fluxo de Aprovação | **Fluxo da Mudança** | Not every post-creation step is an approval |
+| Teams / CAB / Deploy PRD steps | Generic 3-step informational rail | No implementation leakage |
+
+#### Fields added
+
+- **Classificação da mudança** — `Normal` | `Emergencial` (required; default `normal`)
+
+#### Right rail (informational only)
+
+```text
+Fluxo da Mudança
+1  Aprovação do responsável
+2  Validação da mudança
+3  Autorização para execução
+```
+
+#### Canonical frontend model (F1.3)
+
+```typescript
+CreateChangeRequest {
+  targetRef: string;                    // was componentRef
+  classification: 'normal' | 'emergency';
+  requestedBy: string;
+  ownerRef?: string;
+  systemRef?: string;                   // optional catalog enrichment — retained
+  title: string;
+  summary: string;
+  requestedWindow: { date, startsAt, endsAt };
+  risk: 'low' | 'medium' | 'high';
+  rollbackPlan: string;
+  evidence: ChangeEvidence[];
+}
+```
+
+**Removed from model:** `environment`, `artifactVersion`, `componentRef`
+
+#### Section 1 layout (F1.3)
+
+```text
+Row 1:  Alvo da mudança (md=8)  |  Classificação (md=4)
+Row 2:  Título da mudança (full width)
+Row 3:  Resumo (full width)
+Row 4:  Solicitante              |  Responsável
+```
+
+#### Section 3 layout (F1.3 — post-review fix)
+
+```text
+Row 1:  Nível de risco (md=4)
+Row 2:  Plano de reversão (full width, 4 rows)
+```
+
+Do **not** restore side-by-side risk/reversal (3/9) — it breaks form rhythm.
+
+#### Evidence zero-state (neutral)
+
+> Nenhuma evidência disponível no momento. Referências e documentos de apoio poderão ser associados conforme o contexto da mudança.
+
+Catalog-derived evidence chips (ADO annotations, links) remain **contextual metadata**, not universal evidence definitions.
+
+#### Remaining contextual elements (accepted)
+
+- Catalog evidence may show `dev.azure.com/*` annotation values when present on the selected Component
+- Page subtitle: *"Solicitação de mudança para produção"* — scope statement, not a form field
+
+**Out of scope (F1.3):** backend APIs, persistence, ITSM providers, conditional GMUD types, workflow engine, System/Resource target selection, attachment storage.
+
+---
+
+## 2. Architecture decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Dedicated plugin `@internal/plugin-change-management` | Keeps GMUD isolated from Scaffolder; enables clean API swap in F2 |
+| `ChangeManagementApi` + `MockChangeManagementApi` | Frontend never imports provider-specific types; mock returns `MOCK-CHG-000001` |
+| 4 form sections (no ITSM/provider section) | Aligns with reviewed F1 scope; provider wiring deferred |
+| `targetRef` not `componentRef` (F1.3) | Domain language decoupled from Catalog Component kind; still Component-backed in F1.3 |
+| `classification` not `environment` (F1.3) | Normal/Emergencial is governance classification, not environment |
+| No `artifactVersion` in universal model (F1.3) | Artifact context is deployment-specific; may appear as evidence later |
+| `systemRef` retained as optional (F1.3) | Useful catalog enrichment; not shown in UI |
+| `rollbackPlan` property name unchanged (F1.3) | Internal API stability; UI label is "Plano de reversão" |
+| Generic right-rail copy (F1.3) | Informational only; no Teams/ADO/Kubernetes/deployment assumptions |
+| `validateGmudForm` extracted (F1.3) | Testable validation without DOM coupling |
+| Plugin-local `makeStyles` only | Visual polish without global theme regressions |
+| Feature discovery (`app.packages: all`) | Plugin registers via `src/alpha.tsx` |
+| Sidebar via `nav.take('page:change-management')` | After Scaffolder in developer workflow group |
+
+---
+
+## 3. ADO file map
+
+### Plugin (`plugins/change-management/`)
+
+| Path | Purpose |
+|------|---------|
+| `package.json` | Frontend plugin package definition |
+| `src/alpha.tsx` | `createFrontendPlugin` + `PageBlueprint` at `/gmud` |
+| `src/routes.ts` | `rootRouteRef` |
+| `src/index.ts` | Public exports incl. `ChangeClassification` |
+| `src/api/ChangeManagementApi.ts` | API ref + `ApiBlueprint` extension |
+| `src/api/MockChangeManagementApi.ts` | Mock `createChangeRequest` |
+| `src/model/types.ts` | F1.3 `CreateChangeRequest` contract |
+| `src/model/types.test.ts` | Model shape / removed-property architecture tests |
+| `src/utils/catalogContext.ts` | Entity display name, evidence, owner/system refs |
+| `src/utils/resolveRequesterContext.ts` | Identity + catalog requester resolution |
+| `src/utils/gmudFormValidation.ts` | Form validation (classification, target, etc.) |
+| `src/utils/gmudFormValidation.test.ts` | Validation unit tests |
+| `src/components/GmudCreatePage/GmudCreatePage.tsx` | Page shell, layout, submit flow |
+| `src/components/GmudCreatePage/GmudForm.tsx` | 4-section form (F1.3 semantics) |
+| `src/components/GmudCreatePage/ApprovalFlowRail.tsx` | Right-rail Fluxo da Mudança / status / id |
+| `src/components/GmudCreatePage/gmudCreateStyles.ts` | Shared visual vocabulary |
+| `src/components/GmudCreatePage/GmudContextField.tsx` | Read-only context presentation |
+| `src/**/*.test.ts(x)` | Unit and integration tests |
+
+### Docs / UI reference
+
+| Path | Purpose |
+|------|---------|
+| `docs/ui/gmud-create-reference.jpg` | Composition authority (labels superseded by F1.3 doc) |
+| `docs/ui/gmud-create-screen.md` | **Normative F1.3 UI contract** |
+| `docs/ui/screenshots/README.md` | F1.2 before / F1.3 after capture notes |
+
+### App wiring
+
+| Path | Change |
+|------|--------|
+| `packages/app/package.json` | Dependency on `@internal/plugin-change-management` |
+| `app-config.yaml` | `page:change-management` path `/gmud` |
+| `packages/app/src/modules/nav/Sidebar.tsx` | `nav.take('page:change-management')` |
+| `packages/app/src/modules/nav/Sidebar.test.tsx` | Navigation test for GMUD link |
+
+---
+
+## 4. Tests and validation
+
+### Commands run (F1.3 — 2026-08-30)
+
+```bash
+# Plugin unit/integration tests — PASS (22/22)
+yarn test plugins/change-management --watchAll=false
+
+# Plugin lint — PASS
+yarn workspace @internal/plugin-change-management lint
+```
+
+### Test coverage
+
+| Suite | Focus |
+|-------|-------|
+| `plugin.test.tsx` | Plugin registration, `/gmud` route |
+| `GmudCreatePage.test.tsx` | Sections, domain purity, payload shape, classification, evidence zero-state |
+| `model/types.test.ts` | Canonical model keys; no `environment`/`artifactVersion`/`componentRef` |
+| `gmudFormValidation.test.ts` | Classification required; normal/emergency accepted |
+| `catalogContext.test.ts` | Evidence, owner/system refs, display names |
+| `resolveRequesterContext.test.ts` | Identity + catalog requester resolution |
+| `Sidebar.test.tsx` | Navigation GMUD link |
+
+### Payload boundary assertions (F1.3)
+
+Submit payload must include: `targetRef`, `classification`, `requestedWindow`, `evidence`, `systemRef` (when catalog provides it).
+
+Submit payload must **not** include: `environment`, `artifactVersion`, `componentRef`, or provider/workflow leakage (`teams`, `kubernetes`, `deploy`, etc.).
+
+---
+
+## 5. Visual validation (manual)
+
+Compare `/gmud` against [`docs/ui/gmud-create-screen.md`](../ui/gmud-create-screen.md) (F1.3 contract supersedes deployment-centric labels in the JPG reference):
+
+1. Start portal: `yarn start`
+2. Sign in and open `/gmud` at ~1440px width
+3. Verify F1.3 semantics:
+   - **Alvo da mudança** + **Classificação** (no Ambiente/PRD, no Versão/Artefato)
+   - **Janela de Execução** (not Implantação)
+   - **Avaliação de Risco** — stacked risk + full-width reversal plan
+   - **Fluxo da Mudança** rail (no Teams/CAB/deploy wording)
+   - Neutral evidence zero-state when catalog has no links/annotations
+4. Submit — expect success alert with mock ID `MOCK-CHG-000001`
+5. Capture `docs/ui/screenshots/gmud-create-f1.3-after.png` (manual; auth required)
+
+### F1.3 vs F1.2 comparison
+
+| Element | F1.2 | F1.3 |
+|---------|------|------|
+| Section 1 row 1 | Aplicação / Ambiente PRD / Versão·Artefato | Alvo da mudança / Classificação |
+| Section 2 title | Janela de Implantação | Janela de Execução |
+| Section 3 | Risco e Rollback (3/9 side-by-side) | Avaliação de Risco (stacked) |
+| Owner label | Owner do sistema | Responsável |
+| Right rail | Fluxo de Aprovação (Teams/CAB/deploy) | Fluxo da Mudança (generic) |
+| Model | `componentRef`, `environment: PRD`, `artifactVersion?` | `targetRef`, `classification` |
+
+---
+
+## 6. Field justification (F1.3)
+
+Every visible element must answer: WHAT changes · WHEN · RISK/reversal · EVIDENCE · or WHAT HAPPENS AFTER creation.
+
+| Field / element | Purpose |
+|-----------------|---------|
+| Alvo da mudança | WHAT — scope of the change |
+| Classificação | Governance classification (normal vs emergency) |
+| Título / Resumo | Describe the change |
+| Solicitante | Auditability (identity-derived) |
+| Responsável | Governance ownership (catalog `spec.owner`) |
+| Janela de Execução | WHEN — authorized execution window |
+| Nível de risco | Risk evaluation |
+| Plano de reversão | Recovery if change fails |
+| Evidências | Supporting references (catalog-derived today) |
+| Fluxo da Mudança | Post-creation process (informational) |
+| Status | Current change state |
+| Identificador | Stable correlation ID (`changeId`) |
+
+---
+
+## 7. Next slice — gate before F2
+
+**F1.3 stop condition:** review domain model and screen with architecture stakeholders before proceeding.
+
+F2 (when approved) should:
+
+1. Implement backend `ChangeManagementService` behind `ChangeManagementApi`
+2. Replace `MockChangeManagementApi` factory with real client
+3. Accept F1.3 `CreateChangeRequest` shape — do not reintroduce `environment`/`artifactVersion` without ADR
+4. Add provider configuration (app-config + secrets) without leaking provider fields into frontend types
+5. Wire RBAC permissions for create/read change requests
+6. Add ADR for ITSM integration approach
+
+**F1.3 handoff complete.** Frontend domain model is generic change-management; backend swap is isolated to `changeManagementApiExtension` factory only.
