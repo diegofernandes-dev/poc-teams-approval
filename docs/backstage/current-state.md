@@ -55,4 +55,9 @@ F1.3 frontend slice is **complete**. Do **not** begin F2 backend (`ChangeManagem
 
 ## ADO implementation reference
 
-After repository model correction, implementation commit SHA on `feat/ado-repo-governance` will be recorded in the latest [`implementation-progress.md`](./implementation-progress.md) checkpoint header.
+| Item | Value |
+|---|---|
+| Branch | `feat/ado-repo-governance` |
+| Implementation commit | `087903f` (F1.3 plugin + doc cleanup) |
+| Prior F1.3 commit | `3cd285a` |
+| Bridge handoff commit | `fdae3f3` |
