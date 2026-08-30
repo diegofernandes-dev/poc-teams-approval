@@ -330,7 +330,7 @@ F2 (when approved) should:
 | Repository | Branch | SHA |
 |---|---|---|
 | ADO `platform-devops-developer-portal` | `feat/ado-repo-governance` | `52e01ca` |
-| Bridge `poc-teams-approval` | `main` | `a0c2409` |
+| Bridge `poc-teams-approval` | `main` | `cd0c799` |
 
 ### Tests executed (ADO — 2026-08-30)
 
