@@ -1,10 +1,10 @@
 # GMUD create screen — UI implementation contract
 
-> Status: **normative UI reference — F1.3 semantic revision**
+> Status: **normative UI reference — F1.4 integrity cleanup**
 >
-> Related ADR: [`ADR-002 — Backstage is the change-request onramp`](../adr/ADR-002-backstage-change-onramp.md)
+> Related ADRs: [ADR-002](../adr/ADR-002-backstage-change-onramp.md) · [ADR-003](../adr/ADR-003-provider-agnostic-change-management.md)
 >
-> Visual reference: [`gmud-create-reference.jpg`](./gmud-create-reference.jpg) (composition authority; F1.3 supersedes deployment-centric labels)
+> Visual reference: [`gmud-create-reference.jpg`](./gmud-create-reference.jpg) (composition authority; F1.3+ supersedes deployment-centric labels)
 
 ![GMUD create screen reference](./gmud-create-reference.jpg)
 
@@ -23,7 +23,9 @@ The right rail answers: **WHAT HAPPENS AFTER I CREATE IT?**
 
 Do **not** expose universal wording that assumes Teams, Azure DevOps, Kubernetes, CI/CD pipelines, Docker images, or deployment as the only change type. Technology-specific context may appear later when actually available.
 
-**F1.3 design rule:** every visible element must serve change management (describe, classify, evaluate risk, plan execution/reversal, support approval/audit/evidence, or communicate state). Do not add fields to fill layout space.
+**Design rule:** every visible element must serve change management (describe, classify, evaluate risk, plan execution/reversal, support approval/audit/evidence, or communicate state). Do not add fields to fill layout space.
+
+**Provider opacity:** ITSM provider choice (SharePoint, Jira, ServiceNow) is **not** part of the developer-facing GMUD creation experience. The developer must not choose a provider, see provider cards, understand provider routing, or know which backend provider is used. Provider selection belongs behind the Change Management capability (see ADR-003).
 
 **Backstage first:** use Backstage/MUI form controls, theme, typography, and interaction patterns. Refine through semantics, composition, spacing, hierarchy, and proportion — not a parallel GMUD design system.
 
@@ -40,11 +42,11 @@ Production scope is communicated by the page subtitle. Do **not** repeat product
 
 ## Desktop layout
 
-- **main column:** ~75–80% width — numbered form sections in one InfoCard surface;
+- **main column:** ~75–80% width — four numbered form sections in one InfoCard surface;
 - **right rail:** ~20–25% — Fluxo da Mudança, Status, Identificador;
 - responsive: rail stacks below form on narrow screens.
 
-Read-only context (`Solicitante`, `Responsável`) is typographic (label + value), not faux outlined inputs.
+Read-only context (`Solicitante`, `Responsável`, `Referências de contexto`) is typographic (label + value) or chips — not faux outlined inputs.
 
 ## Section 1 — Detalhes da Mudança
 
@@ -60,6 +62,7 @@ Composition (do **not** force a three-column first row):
 | 2 | **Título da mudança** (full width) |
 | 3 | **Resumo** (full width, multiline) |
 | 4 | **Solicitante** · **Responsável** |
+| 5 | **Referências de contexto** (read-only; when catalog provides them) |
 
 ### Alvo da mudança
 
@@ -72,6 +75,8 @@ Composition (do **not** force a three-column first row):
 
 - Required selector: **Normal** | **Emergencial**.
 - Canonical model: `classification: 'normal' | 'emergency'`.
+- **Initial state:** empty (`''`) — the user must explicitly choose Normal or Emergencial.
+- Validation must reject an empty classification.
 - Do **not** model as environment. Do **not** add Standard/other categories without approved governance.
 
 ### Removed fields (F1.3)
@@ -83,10 +88,20 @@ Composition (do **not** force a three-column first row):
 
 ### Context fields
 
-| Field | Source |
-|---|---|
-| Solicitante | Authenticated Backstage user identity |
-| Responsável | Catalog `spec.owner` (display human-readable group/team name) |
+| Field | Source | Semantics |
+|---|---|---|
+| Solicitante | Authenticated Backstage user identity | Who is requesting the change |
+| Responsável | Catalog `spec.owner` (display human-readable group/team name) | **Ownership/governance context** for the target — not the managerial approver |
+
+### Referências de contexto (target context)
+
+Catalog-derived metadata about the **target** — not change evidence.
+
+Examples: repository link, build definition, catalog source link, service metadata links.
+
+- Display as read-only chips or links when available from the selected Component.
+- Helper copy when shown: references are from the catalog target, not evidence of the change itself.
+- Do **not** include target context in `evidence[]` on submit in F1.4.
 
 ## Section 2 — Janela de Execução
 
@@ -130,18 +145,19 @@ Do not use deployment-only examples (containers, images, pipelines) in placehold
 4  Evidências
 ```
 
-Supporting evidence for evaluation and audit — **not** CI/CD metadata by definition.
+**Change evidence** — artifacts that support evaluation and audit of **this specific change**.
 
-F1.3 behavior:
+Examples of change evidence (future): validation result, implementation plan, change script, PR associated with the change, test execution, approval artifact, supporting document.
 
-- Show catalog-derived references when available (links, annotations).
-- Neutral zero-state when none exist: *"Nenhuma evidência disponível no momento. Referências e documentos de apoio poderão ser associados conforme o contexto da mudança."*
+**Not** target context: repository link, build definition, catalog source link, and generic service metadata belong in Section 1 **Referências de contexto**, not here.
+
+F1.4 behavior:
+
+- Show neutral zero-state: *"Nenhuma evidência disponível no momento. Referências e documentos de apoio poderão ser associados conforme o contexto da mudança."*
+- Do **not** display catalog-derived target metadata in this section.
 - Do **not** require pipeline/PR/image/test fields.
-- Do **not** implement attachment storage in F1.3.
-
-## Section 5 — Integração de GMUD
-
-**Not implemented in F1.** Provider integration (SharePoint/Jira/ServiceNow) is architectural visualization only for future phases.
+- Do **not** implement attachment storage in F1.4.
+- Submit payload: `evidence: []` until real change-specific evidence exists.
 
 ## Right rail — Fluxo da Mudança
 
@@ -150,8 +166,8 @@ Informational only — not a workflow engine.
 ```text
 Fluxo da Mudança
 
-1  Aprovação do responsável
-   A solicitação é avaliada pelo responsável definido para a mudança.
+1  Aprovação do gestor
+   A solicitação é avaliada pelo gestor responsável pela aprovação da mudança.
 
 2  Validação da mudança
    A mudança e a janela solicitada são avaliadas conforme o processo de governança.
@@ -162,6 +178,8 @@ Fluxo da Mudança
 ```
 
 Do **not** mention Teams, Adaptive Cards, Azure DevOps, CAB scheduling implementation, deploy locks, or Kubernetes.
+
+The Catalog **Responsável** field is ownership context only — it must not be equated with the managerial approver described in step 1. Approver resolution is a later architecture concern; not implemented in F1.4.
 
 ## Right rail — Status
 
@@ -186,12 +204,13 @@ After creation: display canonical `changeId` from API response.
 
 | Action | Label |
 |---|---|
-| Secondary | Salvar rascunho |
 | Primary | Criar GMUD |
+
+No secondary draft action in F1.4 — draft persistence requires a real backend model (deferred to F2+).
 
 No `Approve` action on this screen.
 
-## Canonical frontend model (F1.3)
+## Canonical frontend model
 
 ```typescript
 CreateChangeRequest {
@@ -199,22 +218,22 @@ CreateChangeRequest {
   classification: 'normal' | 'emergency';
   requestedBy: string;
   ownerRef?: string;
-  systemRef?: string;        // optional catalog enrichment
+  systemRef?: string;        // optional catalog enrichment — not an editable field
   title: string;
   summary: string;
   requestedWindow: { date, startsAt, endsAt };
   risk: 'low' | 'medium' | 'high';
   rollbackPlan: string;
-  evidence: ChangeEvidence[];
+  evidence: ChangeEvidence[];  // F1.4: empty until change-specific evidence exists
 }
 ```
 
-**Removed:** `environment`, `artifactVersion`, `componentRef`
+**Removed / not reintroduced:** `environment`, `artifactVersion`, `componentRef`, `provider`, `teamsUserId`, `adoApprovalId`, `cabDeferredApprovalId`
 
-## F1.3 stop condition
+## F1.4 stop condition
 
-After semantic revision: **STOP**. No backend, conditional GMUD types, workflow engine, provider integration, or expanded catalog target types.
+After integrity cleanup: **STOP**. No backend, persistence, ITSM providers, workflow engine, provider integration, or expanded catalog target types.
 
 ## Screenshots
 
-See [`screenshots/README.md`](./screenshots/README.md) for F1.3 capture notes.
+See [`screenshots/README.md`](./screenshots/README.md) for capture notes.

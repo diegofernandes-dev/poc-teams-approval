@@ -2,10 +2,10 @@
 
 > **Bridge repository:** `diegofernandes-dev/poc-teams-approval` — architectural handoff (this document)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal` — authoritative source code  
-> **Checkpoint:** F1.3 — Functional & semantic UX review (complete)  
-> **Prior checkpoints:** F1 (frontend shell) · F1.1 (visual polish) · F1.2 (Backstage-first composition)  
+> **Checkpoint:** F1.4 — Architecture & functional integrity cleanup (complete) · F1.3 prior  
+> **Prior checkpoints:** F1 (frontend shell) · F1.1 (visual polish) · F1.2 (Backstage-first composition) · F1.3 (semantic UX)  
 > **UI reference:** [`gmud-create-reference.jpg`](../ui/gmud-create-reference.jpg) · [`gmud-create-screen.md`](../ui/gmud-create-screen.md)  
-> **Status:** F1.3 complete — **STOP** before F2 backend (domain model review gate)
+> **Status:** F1.4 complete — **STOP** before F2 backend (architecture review gate)
 >
 > **Note:** ADO file paths in section 3 are **implementation references** in the Azure DevOps repository, not paths in this bridge repo.
 
@@ -276,3 +276,82 @@ F2 (when approved) should:
 6. Add ADR for ITSM integration approach
 
 **F1.3 handoff complete.** Frontend domain model is generic change-management; backend swap is isolated to `changeManagementApiExtension` factory only.
+
+---
+
+## 8. GMUD F1.4 — Architecture & Functional Integrity Cleanup
+
+**Checkpoint:** F1.4 — corrective alignment before any backend work. **STOP** — do not begin F2.
+
+### Corrections applied
+
+| Area | F1.3 state | F1.4 correction |
+|---|---|---|
+| ADR set on `main` | ADR-002 only | ADR-001 through ADR-005 consolidated; MVP branch superseded |
+| ADR-002 provider wording | SharePoint implied as GMUD record of truth | References ADR-003; SharePoint optional adapter only |
+| UI contract Section 5 | ITSM/provider section present | Removed — provider choice not in developer UX |
+| Right rail step 1 | Aprovação do responsável | **Aprovação do gestor** (Catalog Responsável remains ownership context) |
+| Classification | Default `normal` | Initial `''`; explicit selection required |
+| Draft action | Fake “Salvar rascunho” alert | Removed — no persistence in F1.4 |
+| Evidence semantics | Catalog metadata shown/sent as `evidence[]` | Target context in Section 1; Section 4 zero-state; `evidence: []` on submit |
+
+### Evidence semantic decision (F1.4)
+
+**Option A — relabel and separate:** catalog-derived links display under Section 1 **Referências de contexto** with explicit copy that they are target context, not change evidence. Section 4 **Evidências** shows zero-state only. Submit payload sends `evidence: []` until real change-specific evidence workflows exist.
+
+### Bridge files changed
+
+| Path | Change |
+|---|---|
+| `docs/adr/README.md` | New — index + MVP branch supersession note |
+| `docs/adr/ADR-001-azure-devops-approval-authority.md` | Promoted from MVP branch |
+| `docs/adr/ADR-002-backstage-change-onramp.md` | Rewritten — provider-neutral; references ADR-003 |
+| `docs/adr/ADR-003-provider-agnostic-change-management.md` | Promoted from MVP branch |
+| `docs/adr/ADR-004-teams-delegated-approval-identity.md` | Promoted from MVP branch |
+| `docs/adr/ADR-005-cab-scheduling-and-concurrency.md` | Promoted from MVP branch |
+| `docs/ui/gmud-create-screen.md` | F1.4 contract — four sections, gestor copy, classification, draft removal, evidence semantics |
+| `docs/backstage/current-state.md` | F1.4 snapshot; `main` canonical; MVP branch superseded |
+| `docs/future-gmud-context-enrichment.md` | Supersession banner pointing to ADR-003 |
+| `docs/backstage/implementation-progress.md` | This section |
+
+### ADO files changed
+
+| Path | Change |
+|---|---|
+| `plugins/change-management/src/components/GmudCreatePage/GmudCreatePage.tsx` | Empty classification initial; `evidence: []`; remove draft handler |
+| `plugins/change-management/src/components/GmudCreatePage/GmudForm.tsx` | Classification placeholder; target context in Section 1; remove draft button |
+| `plugins/change-management/src/components/GmudCreatePage/ApprovalFlowRail.tsx` | Gestor approval copy |
+| `plugins/change-management/src/utils/catalogContext.ts` | `buildTargetContextFromComponent` rename |
+| `plugins/change-management/src/utils/catalogContext.test.ts` | Updated for rename |
+| `plugins/change-management/src/components/GmudCreatePage/GmudCreatePage.test.tsx` | F1.4 assertions |
+
+### Commits
+
+| Repository | Branch | SHA |
+|---|---|---|
+| ADO `platform-devops-developer-portal` | `feat/ado-repo-governance` | `52e01ca` |
+| Bridge `poc-teams-approval` | `main` | *(this commit)* |
+
+### Tests executed (ADO — 2026-08-30)
+
+```bash
+yarn workspace @internal/plugin-change-management test   # PASS 24/24
+yarn workspace @internal/plugin-change-management lint     # PASS
+yarn tsc                                                   # PASS
+yarn tsc:full                                              # FAIL — pre-existing node_modules type errors (unrelated to F1.4)
+yarn lint                                                  # FAIL — pre-existing packages/app undeclared @backstage/plugin-catalog-react import (unrelated to F1.4)
+```
+
+### Deviations
+
+None between ADO implementation and F1.4 normative contract at time of handoff.
+
+### Unresolved questions
+
+1. **Approver resolution** — how managerial approver is derived from identity/org structure (deferred; UI copy only in F1.4).
+2. **ADR-004 / ADR-005** — remain Proposed pending technical validation.
+3. **Draft persistence** — deferred until backend `ChangeManagementService` exists.
+
+### Next recommended slice
+
+Architecture review gate on consolidated ADR set + F1.4 contract. **Do not start F2** until approved.

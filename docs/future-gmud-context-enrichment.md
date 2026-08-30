@@ -3,6 +3,8 @@
 > Status: **future evolution / explicitly out of current POC scope**.
 >
 > Current priority remains proving the basic approval flow end-to-end before enriching the approval request.
+>
+> **Provider architecture supersession (F1.4):** SharePoint-as-source-of-truth assumptions in this document are superseded by [ADR-003 — Change management is provider-agnostic](./adr/ADR-003-provider-agnostic-change-management.md). SharePoint is one optional provider adapter — not a platform assumption. This document remains a future enrichment reference for approval-card context only.
 
 ## Goal
 
