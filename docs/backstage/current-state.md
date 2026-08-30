@@ -60,7 +60,7 @@ F1.4 integrity cleanup is **complete**. Do **not** begin F2 backend (`ChangeMana
 |---|---|
 | Branch | `feat/ado-repo-governance` |
 | Implementation commit | `52e01ca` (F1.4 integrity cleanup) |
-| Bridge handoff commit | *(recorded after push)* |
+| Bridge handoff commit | `a0c2409` |
 
 ## Superseded references
 
