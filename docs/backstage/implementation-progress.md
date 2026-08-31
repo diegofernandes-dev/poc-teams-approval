@@ -2,10 +2,10 @@
 
 > **Bridge repository:** `diegofernandes-dev/poc-teams-approval` — architectural handoff (this document)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal` — authoritative source code  
-> **Checkpoint:** F1.4 — Architecture & functional integrity cleanup (complete) · F1.3 prior  
-> **Prior checkpoints:** F1 (frontend shell) · F1.1 (visual polish) · F1.2 (Backstage-first composition) · F1.3 (semantic UX)  
-> **UI reference:** [`gmud-create-reference.jpg`](../ui/gmud-create-reference.jpg) · [`gmud-create-screen.md`](../ui/gmud-create-screen.md)  
-> **Status:** F1.4 complete — **STOP** before F2 backend (architecture review gate)
+> **Checkpoint:** F2.0 — Change Management backend contract & architecture (complete) · F1.4 prior  
+> **Prior checkpoints:** F1 (frontend shell) · F1.1 (visual polish) · F1.2 (Backstage-first composition) · F1.3 (semantic UX) · F1.4 (integrity cleanup)  
+> **UI reference:** [`gmud-create-screen.md`](../ui/gmud-create-screen.md) · Backend contract: [ADR-006](../adr/ADR-006-change-management-backend-contract.md)  
+> **Status:** F2.0 complete — **STOP** before F2.1 (architecture review gate)
 >
 > **Note:** ADO file paths in section 3 are **implementation references** in the Azure DevOps repository, not paths in this bridge repo.
 
@@ -310,7 +310,7 @@ F2 (when approved) should:
 | `docs/adr/ADR-004-teams-delegated-approval-identity.md` | Promoted from MVP branch |
 | `docs/adr/ADR-005-cab-scheduling-and-concurrency.md` | Promoted from MVP branch |
 | `docs/ui/gmud-create-screen.md` | F1.4 contract — four sections, gestor copy, classification, draft removal, evidence semantics |
-| `docs/backstage/current-state.md` | F1.4 snapshot; `main` canonical; MVP branch superseded |
+| `docs/backstage/current-state.md` | F2.0 snapshot; backend scaffold; STOP before F2.1 |
 | `docs/future-gmud-context-enrichment.md` | Supersession banner pointing to ADR-003 |
 | `docs/backstage/implementation-progress.md` | This section |
 
@@ -396,6 +396,7 @@ See [ADR-006](./../adr/ADR-006-change-management-backend-contract.md) for full c
 | `docs/adr/ADR-003-provider-agnostic-change-management.md` | Semantic correction |
 | `docs/adr/README.md` | Platform flow + ADR-006 index |
 | `docs/adr/ADR-006-change-management-backend-contract.md` | New — F2 backend contract |
+| `docs/backstage/current-state.md` | F2.0 snapshot — backend scaffold, STOP before F2.1 |
 | `docs/backstage/implementation-progress.md` | This section |
 
 ### ADO files changed
@@ -425,7 +426,7 @@ See [ADR-006](./../adr/ADR-006-change-management-backend-contract.md) for full c
 | Repository | Branch | SHA |
 |---|---|---|
 | ADO `platform-devops-developer-portal` | `feat/ado-repo-governance` | `b2bed17` |
-| Bridge `poc-teams-approval` | `main` | `8799ff7` |
+| Bridge `poc-teams-approval` | `main` | `4ec7292` |
 
 ### Tests executed (ADO)
 

@@ -47,14 +47,25 @@ Backstage does **not** become the approval authority. It does **not** become the
 
 **Out of scope:** backend persistence, ITSM providers, workflow engine, attachment storage, conditional GMUD types, expanded catalog target kinds.
 
-## F2 gate (not started)
+## F2 gate
 
-F2 requires explicit architecture sign-off on the F1.3 domain model before:
+### F2.0 — complete (architecture scaffold)
 
-- `ChangeManagementService` backend behind `ChangeManagementApi`
-- Provider configuration (app-config + secrets)
+Delivered in ADO commit `b2bed17`. See [ADR-006](./ADR-006-change-management-backend-contract.md):
+
+- `ChangeManagementService` + `IChangeManagementProvider` + HTTP routes
 - RBAC permissions for create/read
-- Provider adapter implementation per ADR-003
+- In-memory fake provider (non-production)
+- Frontend **still uses mock** — wiring deferred to F2.1
+
+### F2.1+ — not started (requires architecture review)
+
+After F2.0 sign-off:
+
+- Wire `ChangeManagementApi` to backend
+- Durable development provider + real `changeId` sequence
+- Persistent idempotency
+- **STOP** before SharePoint/Jira/ServiceNow adapters
 
 ## Related documents
 

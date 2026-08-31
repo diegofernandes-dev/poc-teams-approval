@@ -6,9 +6,9 @@
 
 ## Context
 
-F1.4 delivered a provider-neutral GMUD frontend with `ChangeManagementApi` and a mock implementation. There is no backend persistence, no trusted server-side identity, and no provider abstraction in the ADO repository.
+F1.4 delivered a provider-neutral GMUD frontend with `ChangeManagementApi` and a mock implementation. **F2.0 (ADO commit `b2bed17`)** adds the backend contract scaffold: `ChangeManagementService`, `IChangeManagementProvider`, HTTP routes, RBAC, and unit tests — using an in-memory fake provider only. There is still **no durable persistence**, **no ITSM integration**, and **no frontend wiring**.
 
-F2.0 must define the backend architecture required to support:
+F2.0 defines the backend architecture required to support:
 
 1. create a change;
 2. retrieve a change by `changeId`.
