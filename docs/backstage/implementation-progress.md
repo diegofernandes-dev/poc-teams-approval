@@ -426,7 +426,7 @@ See [ADR-006](./../adr/ADR-006-change-management-backend-contract.md) for full c
 | Repository | Branch | SHA |
 |---|---|---|
 | ADO `platform-devops-developer-portal` | `feat/ado-repo-governance` | `b2bed17` |
-| Bridge `poc-teams-approval` | `main` | `4ec7292` |
+| Bridge `poc-teams-approval` | `main` | `4ec7292` (F2.0 contract) · `317b821` (architect snapshot refresh) |
 
 ### Tests executed (ADO)
 

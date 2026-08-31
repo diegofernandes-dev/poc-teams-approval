@@ -92,7 +92,7 @@ F2.0 backend **contract scaffold** is **complete**. Do **not** begin F2.1 (durab
 | Branch | `feat/ado-repo-governance` |
 | F1.4 commit | `52e01ca` |
 | **F2.0 commit** | **`b2bed17`** (backend contract scaffold) |
-| Bridge handoff commit | `4ec7292` (F2.0 docs on `main`) |
+| Bridge handoff commit | `317b821` (F2.0 architect snapshot on `main`) |
 
 ## Superseded references
 
