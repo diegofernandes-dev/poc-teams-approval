@@ -16,13 +16,14 @@ The branch `docs/architecture-decisions-mvp` is **superseded by `main`** as of G
 | ADR-004 | Teams approvals use delegated Azure DevOps user identity | Proposed / validation required |
 | ADR-005 | CAB scheduling uses deferred approval plus sequential locking | Proposed / partially validated |
 | ADR-006 | Change management backend contract | Accepted (F2.0 architecture) |
+| ADR-007 | Change record authority and persistence ownership | Accepted (F2.0 architecture review) |
 
 ## Platform flow (target)
 
 ```text
 Developer
   -> Backstage change request (/gmud)
-  -> Change Management capability (canonical contract)
+  -> Change Management capability (canonical contract + platform index)
   -> provider adapter (optional: SharePoint / Jira / ServiceNow)
   -> changeId
   -> controlled change execution

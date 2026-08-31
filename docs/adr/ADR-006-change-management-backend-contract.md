@@ -2,7 +2,7 @@
 
 - Status: Accepted (F2.0 architecture)
 - Date: 2026-08-30
-- Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md)
+- Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md), [ADR-007](./ADR-007-change-record-authority.md)
 
 ## Context
 
@@ -31,15 +31,29 @@ POST/GET /api/change-management/changes
         v
 ChangeManagementService
         |
-        v
-IChangeManagementProvider
+        +-- Platform Canonical Index       [F2.1 durable — see ADR-007]
+        |     changeId, providerKey, externalId, creation snapshot, idempotency
         |
-        +-- FakeChangeManagementProvider   [F2.0 test-only]
-        +-- Development provider           [F2.1]
-        +-- SharePoint / Jira / ServiceNow [future/optional]
+        +-- IChangeManagementProvider (router)
+              |
+              +-- FakeChangeManagementProvider   [F2.0 test-only]
+              +-- Development provider           [F2.1 non-production]
+              +-- SharePoint / Jira / ServiceNow [future/optional]
 ```
 
 The canonical Change Management domain remains independent from Azure DevOps, pipelines, deployments, Teams, CAB, and ITSM schema.
+
+### Record authority (see ADR-007)
+
+| Concern | Owner |
+|---|---|
+| Domain schema / API contract | Platform |
+| Canonical `changeId` / idempotency | Platform |
+| Platform canonical index (F2.1+) | Platform — identity, routing, audit snapshot |
+| Operational GMUD record (production) | ITSM provider |
+| Operational GMUD record (F2.1 dev) | `DevelopmentProvider` — non-production |
+
+F2.0 has no durable platform index; GET reads delegate to the in-memory fake provider. F2.1 must introduce the platform canonical index per ADR-007 before durable persistence is considered complete.
 
 ### Layered contracts
 
@@ -102,6 +116,8 @@ The backend resolves `ownerRef` and `systemRef` from `targetRef` via the Catalog
 - If the target entity cannot be read → `404` / validation error.
 - **F2.0 limitation:** `targetRef` must reference a Catalog **Component** entity (F1.3 scope). System/Resource targets require a future ADR.
 
+**Snapshot semantics:** `ownerRef` and `systemRef` are resolved **once at create** and stored as immutable values on the persisted `Change`. GET does not re-resolve from Catalog. A GMUD created under Team A must not historically appear owned by Team B after catalog ownership changes.
+
 ### Minimal `ChangeStatus`
 
 Only **`submitted`** is valid in F2.0.
@@ -121,7 +137,7 @@ Future workflow states (`approved`, `rejected`, `executed`, etc.) belong to late
 
 This preserves provider replaceability versus using an external ITSM ID as the canonical identifier.
 
-Distributed sequence generation is deferred to F2.1; F2.0 uses a test-only in-memory sequence in `FakeChangeManagementProvider`.
+Distributed sequence generation is deferred to F2.1; F2.0 uses a test-only in-memory sequence in `changeIdGenerator.ts`, injected into `ChangeManagementService` — **not** in the fake provider. F2.1 moves the sequence to the platform durable store (cluster-safe).
 
 ### Provider contract
 
@@ -146,7 +162,21 @@ ProviderReference {
 }
 ```
 
-`ProviderReference` is **internal** — not exposed in the public `Change` HTTP response in F2.0.
+`ProviderReference` is **internal** — not exposed in the public `Change` HTTP response.
+
+**F2.0 gap (F2.1 remediation):** the service currently discards `ProviderReference` after create. F2.1 must persist it in the platform canonical index for provider routing (ADR-007).
+
+### GET routing (F2.1 target)
+
+```text
+GET /changes/:changeId
+  → platform index lookup (changeId → providerKey, externalId, snapshot)
+  → route to correct IChangeManagementProvider adapter
+  → merge/return public Change
+  → if provider unavailable: degraded read from platform snapshot OR 503
+```
+
+F2.0 reads directly from the fake provider without an index layer.
 
 ### HTTP contract
 
@@ -240,7 +270,17 @@ Duplicate POST handling via optional `Idempotency-Key` header:
 - Same key + different payload → `409 CONFLICT`
 - No key → each POST creates a new change (acceptable in dev; key recommended before production)
 
-F2.0 uses in-memory idempotency in the fake provider; durable storage in F2.1.
+Idempotency is **service-owned** via `IdempotencyStore` (`idempotency.ts`) — separate from the provider. F2.0 uses an in-memory store; F2.1 uses durable platform storage with a unique key constraint.
+
+**F2.1 target ordering:**
+
+```text
+validate → authorize → enrich → idempotency check/reserve
+→ generate changeId → persist platform index → provider.create
+→ finalize index + idempotency (atomic) → 201
+```
+
+On provider failure: fail-closed 503; no public `changeId`. Idempotency retry after provider failure must not allocate a new `changeId` for the same key+payload once a prior attempt succeeded.
 
 ### Failure semantics
 
@@ -317,8 +357,10 @@ Correlation via `changeId` and Backstage request logger.
 | 11 | Timezone | Configured default timezone → UTC storage |
 | 12 | getChange returns | Public `Change` model; 404/403 as appropriate |
 | 13 | Excluded domain fields | All pipeline/ITSM/Teams/ADO-specific IDs |
-| 14 | Provider swap impact | New `IChangeManagementProvider` + config only |
-| 15 | Frontend form unchanged on swap | Yes |
+| 14 | Provider swap impact | New adapter + config for new records; historical reads via immutable `providerKey` per change (ADR-007) |
+| 15 | Frontend form unchanged on swap | Yes — API/frontend contract stable; not automatic historical record portability |
+| 16 | Record authority | Hybrid: platform index + ITSM provider record (ADR-007) |
+| 17 | ownerRef/systemRef on read | Creation-time snapshots; not live catalog refs |
 
 ## Consequences
 
@@ -336,9 +378,13 @@ Correlation via `changeId` and Backstage request logger.
 
 ## Recommendation for F2.1
 
-1. Development provider with durable persistence (SQLite/Postgres)
-2. Real `changeId` sequence
-3. Wire frontend `ChangeManagementApi` to backend via discovery + fetch
-4. Remove `requestedBy` / `ownerRef` / `systemRef` from frontend POST payload
-5. Persistent idempotency keys
-6. **STOP** before SharePoint/Jira/ServiceNow
+Per [ADR-007](./ADR-007-change-record-authority.md) — **conditional GO** after architecture acceptance:
+
+1. Platform canonical index (`ChangeRepository`) — SQLite or Postgres for dev
+2. Durable platform-owned `changeId` sequence
+3. Persist `ProviderReference`; route GET via index → provider adapter
+4. Durable idempotency with unique key constraint and atomic finalize
+5. `DevelopmentProvider` — non-production; full record may live in platform DB for dev
+6. Wire frontend `ChangeManagementApi` to backend via discovery + fetch
+7. Remove `requestedBy` / `ownerRef` / `systemRef` from frontend POST payload
+8. **STOP** before SharePoint/Jira/ServiceNow

@@ -457,3 +457,118 @@ None between ADO scaffold and ADR-006 at time of handoff.
 6. **STOP** before SharePoint/Jira/ServiceNow
 
 **F2.0 handoff complete.** Wait for architecture review before F2.1.
+
+---
+
+## 10. GMUD F2.0 Architecture Review — Canonical Record Ownership
+
+**Checkpoint:** F2.0 architecture review — record authority decision before F2.1 durable persistence. **STOP** — do not begin F2.1 ADO implementation until stakeholder acceptance.
+
+### Objective
+
+Resolve who owns the canonical GMUD record before the F2.1 persistence decision becomes irreversible. Evaluate provider-owned, platform-owned, and hybrid models. Document deviations between ADO `b2bed17` and ADR-006. Produce ADR-007 and ADR clarifications.
+
+### Recommended ownership model
+
+**Model C — Hybrid Canonical Index + Provider Record** ([ADR-007](../adr/ADR-007-change-record-authority.md))
+
+| Authority | Owner |
+|---|---|
+| Domain schema / API | Platform |
+| Canonical `changeId` / idempotency | Platform |
+| Platform canonical index (F2.1+) | Platform — identity, routing, audit snapshot |
+| Operational GMUD record (production) | ITSM provider |
+| Operational GMUD record (F2.1 dev) | `DevelopmentProvider` — non-production |
+
+**Rejected:**
+
+- **Model A (provider-owned only):** Cannot route historical reads after provider config change without a platform index; F2.0 code is incomplete Model A
+- **Model B (platform-owned store):** Violates ADR-002; risk of building ServiceNow inside Backstage
+
+### Provider switch behavior (explicit)
+
+Multi-provider coexistence indefinitely:
+
+- `GET CHG-2026-000100` (SharePoint era) → platform index → `providerKey: sharepoint` → SharePoint adapter
+- `GET CHG-2027-000001` (Jira era) → platform index → `providerKey: jira` → Jira adapter
+- `POST /changes` (2027) → new records use configured default provider
+- Immutable `providerKey` per change; bulk migration optional operational project
+
+### ADO `b2bed17` vs ADR-006 — deviations and gaps
+
+| Topic | ADR-006 (pre-review) | ADO `b2bed17` | Resolution |
+|---|---|---|---|
+| `changeId` sequence location | Stated as fake provider | `changeIdGenerator.ts` in service | ADR-006 corrected — code correct |
+| Idempotency location | Stated as fake provider | `idempotency.ts` service store | ADR-006 corrected — code correct |
+| `ProviderReference` persistence | Provider returns reference | Service discards result | F2.1 gap — persist in platform index |
+| Record authority | Ambiguous | Provider is de facto GET source | ADR-007 clarifies Model C |
+| GET routing | Not specified | Direct `provider.get(changeId)` | F2.1 gap — index → adapter |
+| Idempotency race / retry | Not addressed | Race possible; retry after provider fail gets new ID | F2.1 gap — DB constraint + early reserve |
+
+**Confirmed aligned:** service-owned `changeId`; provider does not mint IDs; fail-closed 503; server-derived `requestedBy`/`ownerRef`/`systemRef`; forbidden fields absent from canonical types.
+
+### F2.1 readiness
+
+| Gate | Status |
+|---|---|
+| Ownership model decided | Yes — Model C |
+| ADR-007 + ADR-003/006 updates | Complete (this commit) |
+| Stakeholder acceptance | **Pending** |
+| F2.1 ADO coding | **NO-GO until acceptance** |
+
+### Bridge files changed
+
+| Path | Change |
+|---|---|
+| `docs/adr/ADR-007-change-record-authority.md` | **New** — Model C decision, authority table, provider-switch rules |
+| `docs/adr/ADR-006-change-management-backend-contract.md` | Idempotency/changeId location fix; snapshots; GET routing; ADR-007 reference |
+| `docs/adr/ADR-003-provider-agnostic-change-management.md` | Narrowed replaceability guarantee; platform index |
+| `docs/adr/README.md` | ADR-007 index entry |
+| `docs/backstage/current-state.md` | Architecture review outcome; conditional GO gate |
+| `docs/backstage/implementation-progress.md` | This section |
+
+### ADO files changed
+
+None — architecture review is documentation-only. F2.1 ADO changes deferred until acceptance:
+
+1. `ChangeRepository` / platform canonical index
+2. Persist `ProviderReference`; GET via index → provider
+3. Durable idempotency + `changeId` sequence
+4. `DevelopmentProvider` (non-production)
+5. Frontend wiring
+
+### Commits
+
+| Repository | Branch | SHA |
+|---|---|---|
+| ADO `platform-devops-developer-portal` | `feat/ado-repo-governance` | `b2bed17` (unchanged) |
+| Bridge `poc-teams-approval` | `main` | pending (this review) |
+
+### Tests executed
+
+No ADO code changes — no tests run for this checkpoint.
+
+### Deviations
+
+§9 stated "None between ADO scaffold and ADR-006 at time of handoff." This review identifies:
+
+- **Documentation errors** in ADR-006 (idempotency/sequence location) — corrected
+- **Architecture gaps** in F2.0 code vs target Model C — documented for F2.1; not silent rewrites
+
+### Unresolved questions
+
+1. Stakeholder acceptance of ADR-007 — required before F2.1
+2. Multi-timezone — deferred
+3. GET read scope expansion — F3
+4. Evidence workflow — F2.0 accepts `[]` only
+
+### Next recommended slice (F2.1 — after acceptance)
+
+Per ADR-007 conditional GO:
+
+1. Platform canonical index + durable idempotency + `changeId` sequence
+2. `DevelopmentProvider` (non-production)
+3. Wire frontend to backend
+4. **STOP** before SharePoint/Jira/ServiceNow
+
+**Architecture review complete.** Await stakeholder acceptance before F2.1.
