@@ -513,8 +513,8 @@ Multi-provider coexistence indefinitely:
 |---|---|
 | Ownership model decided | Yes — Model C |
 | ADR-007 + ADR-003/006 updates | Complete (this commit) |
-| Stakeholder acceptance | **Pending** |
-| F2.1 ADO coding | **NO-GO until acceptance** |
+| Stakeholder acceptance | **Accepted 2026-08-31** |
+| F2.1 ADO coding | **Conditional GO** — after ADO realignment to `b2bed17` (see §11) |
 
 ### Bridge files changed
 
@@ -571,4 +571,85 @@ Per ADR-007 conditional GO:
 3. Wire frontend to backend
 4. **STOP** before SharePoint/Jira/ServiceNow
 
-**Architecture review complete.** Await stakeholder acceptance before F2.1.
+**Architecture review complete.** ADR-007 accepted 2026-08-31. See §11 for ADO realignment.
+
+---
+
+## 11. ADO uncommitted Model B drift — detected and reverted
+
+**Checkpoint:** Independent architecture review (F2.0 record-authority gate). Detected
+uncommitted ADO working-tree changes that implemented **Model B** (platform-owned
+full record) by removing the provider layer. **Reverted** to F2.0 commit `b2bed17`
+before any approved F2.1 work.
+
+### Deviation summary
+
+| Aspect | ADO `b2bed17` (F2.0) | Uncommitted working tree (reverted) |
+|---|---|---|
+| Provider layer | `IChangeManagementProvider` + `FakeChangeManagementProvider` | **Removed** |
+| Persistence | In-memory fake provider | `KnexChangeRepository` + `migrations/changeManagement/001_initial.cjs` |
+| Record authority | Incomplete Model A (provider de facto GET source) | **Model B** — platform stores complete `Change` |
+| Routing metadata | N/A (F2.1 gap) | **Absent** — no `providerKey` / `externalId` |
+| Error code | `PROVIDER_UNAVAILABLE` | `PERSISTENCE_UNAVAILABLE` |
+
+### ADO files affected (reverted)
+
+| Path | Action |
+|---|---|
+| `packages/backend/src/modules/changeManagement/ChangeManagementService.ts` | Restored to `b2bed17` |
+| `packages/backend/src/modules/changeManagement/ChangeManagementService.test.ts` | Restored to `b2bed17` |
+| `packages/backend/src/modules/changeManagement/IChangeManagementProvider.ts` | Restored |
+| `packages/backend/src/modules/changeManagement/FakeChangeManagementProvider.ts` | Restored |
+| `packages/backend/src/modules/changeManagement/changeIdGenerator.ts` | Restored |
+| `packages/backend/src/modules/changeManagement/idempotency.ts` | Restored |
+| `packages/backend/src/modules/changeManagement/architecture.test.ts` | Restored |
+| `packages/backend/src/modules/changeManagement/errors.ts` | Restored |
+| `packages/backend/src/modules/changeManagement/types.ts` | Restored |
+| `packages/backend/src/plugins/changeManagementPlugin.ts` | Restored |
+| `packages/backend/package.json` | Restored (`migrations` files entry removed) |
+| `packages/backend/src/modules/changeManagement/ChangeRepository.ts` | **Deleted** (untracked) |
+| `packages/backend/src/modules/changeManagement/ChangeRepository.test.ts` | **Deleted** (untracked) |
+| `packages/backend/migrations/changeManagement/001_initial.cjs` | **Deleted** (untracked) |
+
+### Verification (ADO after realignment)
+
+```bash
+yarn workspace backend test --watchAll=false   # PASS 61/61 (16 suites)
+```
+
+### Resolution
+
+The drift violated ADR-007 Model C and ADR-002 ("Backstage does not become the GMUD
+record database"). F2.1 must implement the **platform canonical index +
+`IChangeManagementProvider`** target per ADR-007 — not a monolithic repository that
+replaces the provider abstraction. See ADR-007 anti-pattern section.
+
+### Gate
+
+| Gate | Status |
+|---|---|
+| ADR-007 stakeholder acceptance | **Accepted 2026-08-31** |
+| ADO code realigned to `b2bed17` | **Yes** |
+| F2.1 ADO coding | **Conditional GO** per ADR-007 §F2.1 scope |
+
+### Bridge files changed
+
+| Path | Change |
+|---|---|
+| `docs/adr/ADR-007-change-record-authority.md` | Stakeholder acceptance; anti-pattern note |
+| `docs/backstage/current-state.md` | Acceptance gate; realignment note |
+| `docs/backstage/implementation-progress.md` | This section |
+
+### ADO files changed
+
+Realignment only — restored F2.0 scaffold at `b2bed17`; no F2.1 implementation.
+
+### Next recommended slice (F2.1)
+
+Per ADR-007 conditional GO:
+
+1. Platform canonical index (`ChangeRepository`) with routing metadata — **not** Model B monolith
+2. Restore/retain `IChangeManagementProvider` + `DevelopmentProvider` (non-production)
+3. Durable idempotency + `changeId` sequence
+4. Wire frontend to backend (separate checkpoint — stop for review after backend persistence)
+5. **STOP** before SharePoint/Jira/ServiceNow

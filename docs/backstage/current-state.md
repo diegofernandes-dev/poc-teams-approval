@@ -4,7 +4,7 @@
 > **Canonical architectural branch:** `main` (branch `docs/architecture-decisions-mvp` superseded as of F1.4)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal`  
 > **Active branch:** `feat/ado-repo-governance`  
-> **Last updated:** 2026-08-30 (F2.0 architecture review)
+> **Last updated:** 2026-08-31 (F2.0 record-authority acceptance)
 
 ## Stack
 
@@ -67,9 +67,9 @@
 | `changeId` ownership | Platform (`ChangeManagementService` / `changeIdGenerator`) — confirmed in ADO `b2bed17` |
 | Idempotency ownership | Platform service store — confirmed in ADO `b2bed17` |
 | Catalog `ownerRef`/`systemRef` | Creation-time snapshots — not live catalog refs on GET |
-| F2.1 readiness | **Conditional GO** — architecture documented; await stakeholder acceptance before ADO F2.1 coding |
+| F2.1 readiness | **Conditional GO** — ADR-007 accepted 2026-08-31; ADO code realigned to `b2bed17` before F2.1 coding |
 
-See [`implementation-progress.md`](./implementation-progress.md) §10 for full review detail and ADO deviations.
+See [`implementation-progress.md`](./implementation-progress.md) §10–§11 for full review detail, ADO deviations, and realignment.
 
 ### Normative references
 
@@ -84,17 +84,22 @@ See [`implementation-progress.md`](./implementation-progress.md) §10 for full r
 - F1.2 before baseline: [`gmud-create-f1.2-after.png`](../ui/screenshots/gmud-create-f1.2-after.png)
 - F1.3+ after capture: manual — see [`screenshots/README.md`](../ui/screenshots/README.md)
 
-## Review gate — STOP before F2.1 ADO implementation
+## Review gate — conditional GO for F2.1 ADO implementation
 
 F2.0 backend **contract scaffold** and **architecture review** are **complete**.
-
-**Do not begin F2.1** (durable platform index, frontend wiring, development provider) until architecture stakeholders **accept**:
+Stakeholders accepted Model C on **2026-08-31**:
 
 1. [ADR-007](../adr/ADR-007-change-record-authority.md) — record authority (Model C)
 2. [ADR-006](../adr/ADR-006-change-management-backend-contract.md) — clarifications (idempotency, GET routing, snapshots)
 3. [ADR-003](../adr/ADR-003-provider-agnostic-change-management.md) — narrowed replaceability guarantee
 
-F2.1 is **not approved** until explicit acceptance is recorded.
+**ADO prerequisite:** uncommitted Model B drift (provider-less `ChangeRepository`) was
+identified and **reverted** to `b2bed17` before F2.1 coding. See
+[`implementation-progress.md`](./implementation-progress.md) §11.
+
+F2.1 may proceed per ADR-007 scope (platform canonical index, `DevelopmentProvider`,
+durable idempotency/sequence). **STOP** before SharePoint/Jira/ServiceNow and before
+frontend wiring until the F2.1 backend checkpoint is reviewed.
 
 ## Source-of-truth rules
 
@@ -121,4 +126,4 @@ F2.1 is **not approved** until explicit acceptance is recorded.
 | Branch `docs/architecture-decisions-mvp` | Superseded by `main` — historical baseline only |
 | GitHub mirror `diegofernandes-dev/platform-devops-developer-portal` | Deprecated accidental mirror — do not use for development |
 | F1.4 "STOP before F2" gate | **Passed** — F2.0 delivered |
-| F2.0 "STOP before F2.1" gate | **Architecture review complete** — awaiting acceptance before ADO F2.1 |
+| F2.0 "STOP before F2.1" gate | **Passed** — ADR-007 accepted 2026-08-31; ADO realigned to `b2bed17` |

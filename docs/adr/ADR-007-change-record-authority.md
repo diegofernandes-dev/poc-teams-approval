@@ -1,6 +1,6 @@
 # ADR-007 — Change record authority and persistence ownership
 
-- Status: Accepted (F2.0 architecture review)
+- Status: Accepted (F2.0 architecture review; stakeholder acceptance 2026-08-31)
 - Date: 2026-08-30
 - Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md), [ADR-006](./ADR-006-change-management-backend-contract.md)
 
@@ -80,6 +80,23 @@ Pure provider-owned record cannot support provider routing after a global config
 ### Why not Model B (platform-owned canonical store)
 
 Conflicts with ADR-002 ("Backstage does not become the GMUD record database"). Introduces retention, DR, schema migration, and ITSM sync obligations disproportionate to the onramp product goal. High risk of accidentally building an ITSM platform inside Backstage.
+
+### Anti-pattern: monolithic `ChangeRepository` without provider layer
+
+A `ChangeRepository` that stores the complete canonical `Change` and **replaces**
+`IChangeManagementProvider` in the service persistence path implements **Model B**,
+not Model C. Symptoms include:
+
+- no `providerKey` / `externalId` routing metadata;
+- GET reads only from the platform database;
+- provider abstraction deleted from the active backend path.
+
+F2.1 must retain `IChangeManagementProvider` (router + `DevelopmentProvider` at
+minimum). The platform canonical index stores identity, routing, audit snapshot,
+idempotency, and sequence — not a substitute for the provider contract. A
+`DevelopmentProvider` may persist a full record in platform DB for non-production
+convenience, but only behind the provider interface with an immutable
+`providerKey` recorded in the index.
 
 ## Provider replaceability (precise guarantee)
 
