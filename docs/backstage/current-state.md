@@ -112,7 +112,7 @@ F2.1 is **not approved** until explicit acceptance is recorded.
 | F1.4 commit | `52e01ca` |
 | **F2.0 commit** | **`b2bed17`** (backend contract scaffold) |
 | Bridge F2.0 handoff | `4ec7292` · `317b821` · `047dcc6` |
-| **Bridge architecture review** | **pending commit** (ADR-007 + §10) |
+| **Bridge architecture review** | **`57613ab`** (ADR-007 + §10) |
 
 ## Superseded references
 

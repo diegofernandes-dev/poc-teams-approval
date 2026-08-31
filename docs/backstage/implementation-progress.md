@@ -542,7 +542,7 @@ None — architecture review is documentation-only. F2.1 ADO changes deferred un
 | Repository | Branch | SHA |
 |---|---|---|
 | ADO `platform-devops-developer-portal` | `feat/ado-repo-governance` | `b2bed17` (unchanged) |
-| Bridge `poc-teams-approval` | `main` | pending (this review) |
+| Bridge `poc-teams-approval` | `main` | **`57613ab`** (F2.0 architecture review) |
 
 ### Tests executed
 
