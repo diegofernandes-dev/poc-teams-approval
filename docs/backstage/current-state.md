@@ -4,7 +4,7 @@
 > **Canonical architectural branch:** `main` (branch `docs/architecture-decisions-mvp` superseded as of F1.4)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal`  
 > **Active branch:** `feat/ado-repo-governance`  
-> **Last updated:** 2026-08-31 (F2.1 backend persistence checkpoint)
+> **Last updated:** 2026-08-31 (F2.1.1 idempotency recovery checkpoint)
 
 ## Stack
 
@@ -46,11 +46,12 @@
 | Canonical backend contract | [ADR-006](../adr/ADR-006-change-management-backend-contract.md) |
 | Record authority | [ADR-007](../adr/ADR-007-change-record-authority.md) — Model C |
 
-#### Backend capabilities (F2.1)
+#### Backend capabilities (F2.1 + F2.1.1)
 
 - Durable platform canonical index with immutable `providerKey`, `externalId`, creation-time snapshot
 - GET routes: index → stored `providerKey` → provider adapter (not global config)
 - Durable idempotency with early reserve + atomic finalize (`Idempotency-Key` header)
+- **F2.1.1:** crash-safe idempotency recovery — `pending`/`completed` state machine; synchronous resume on retry; index-as-recovery-evidence; provider idempotent `create` by `changeId`
 - Durable platform-owned `changeId` sequence (`CHG-{YYYY}-{seq}`)
 - `DevelopmentProvider` operational records in `development_change_records` (logically isolated)
 - Fail-closed provider errors (503); unfinalized index rows not visible on GET
@@ -70,8 +71,9 @@
 | Model | **Model C retained** — `ChangeIndexRepository` + `IChangeManagementProvider` (not Model B monolith) |
 | `providerKey` | Immutable per change; persisted in `change_index` |
 | Historical routing | GET uses stored `providerKey`, not current global config |
-| Orphan record handling | Dev: transactional finalize; prod: log `change.create.orphan` + idempotent retry runbook |
-| Frontend wiring | **Deferred** — awaiting architecture review (next checkpoint) |
+| Orphan record handling | Log `change.create.orphan` (with `idempotencyKey`) + synchronous retry reconciliation; no background worker |
+| Idempotency recovery | **F2.1.1:** pending resume, finalized-index heal, provider idempotent create — see §13 |
+| Frontend wiring | **Deferred** — conditional GO after F2.1.1 architecture review |
 
 ### Normative references
 
@@ -86,13 +88,15 @@
 - F1.2 before baseline: [`gmud-create-f1.2-after.png`](../ui/screenshots/gmud-create-f1.2-after.png)
 - F1.3+ after capture: manual — see [`screenshots/README.md`](../ui/screenshots/README.md)
 
-## Review gate — F2.1 backend checkpoint (awaiting architecture review)
+## Review gate — F2.1.1 idempotency recovery checkpoint (awaiting architecture review)
 
-F2.1 **backend persistence** is implemented per ADR-007 Model C. Frontend remains mock-backed.
+F2.1.1 closes crash/retry reliability gaps before frontend wiring. Frontend remains mock-backed.
 
-**STOP** before SharePoint/Jira/ServiceNow. **STOP** frontend wiring until F2.1 backend review completes.
+**STOP** before SharePoint/Jira/ServiceNow. **STOP** frontend wiring until F2.1.1 review completes.
 
-See [`implementation-progress.md`](./implementation-progress.md) §12 for checkpoint detail, tests, and deviations.
+See [`implementation-progress.md`](./implementation-progress.md) §13 for checkpoint detail, tests, and deviations.
+
+## Review gate — F2.1 backend checkpoint (passed — superseded by F2.1.1 gate)
 
 ## Source-of-truth rules
 
@@ -110,9 +114,11 @@ See [`implementation-progress.md`](./implementation-progress.md) §12 for checkp
 | F1.4 commit | `52e01ca` |
 | **F2.0 commit** | **`b2bed17`** (backend contract scaffold) |
 | **F2.1 commit** | **`0dc3ed4`** (durable Model C backend persistence) |
+| **F2.1.1 commit** | **`pending`** on `feat/ado-repo-governance` (idempotency recovery — see §13) |
 | Bridge F2.0 handoff | `4ec7292` · `317b821` · `047dcc6` |
 | **Bridge architecture review** | **`57613ab`** (ADR-007 + §10) |
 | **Bridge F2.1 handoff** | **`196949c`** (ADO SHA `0dc3ed4` recorded) |
+| **Bridge F2.1.1 handoff** | **`bb8dea2`** (ADO F2.1.1 commit pending on `feat/ado-repo-governance`) |
 
 ## Superseded references
 

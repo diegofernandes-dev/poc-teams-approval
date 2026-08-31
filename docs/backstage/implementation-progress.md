@@ -738,3 +738,113 @@ feat(gmud): F2.1 durable canonical index and DevelopmentProvider
 ### Bridge commit
 
 **`196949c`** — records ADO F2.1 commit `0dc3ed4` (follow-up to initial handoff `c1691f9`).
+
+---
+
+## 13. F2.1.1 idempotency recovery checkpoint
+
+**Checkpoint:** Crash-safe idempotency retry semantics (backend only; no frontend wiring).
+
+**Baseline:** ADO F2.1 commit `0dc3ed4`.
+
+### Idempotency state machine
+
+| State | Meaning |
+|---|---|
+| `pending` | Request reserved; `changeId` may be assigned; finalize not yet complete |
+| `completed` | Index finalized and idempotency closed — same key+payload returns cached result |
+
+Stored per record: `idempotencyKey`, `payloadHash`, `changeId`, `state`, `status`, `createdAt`.
+
+### Retry semantics
+
+| Idempotency | Index | Retry action |
+|---|---|---|
+| `completed` | any | Return cached `{ changeId, status }` |
+| `pending` | finalized | Heal: `complete()` idempotency, return result (Case 3) |
+| `pending` | unfinalized + `changeId` | Resume `finalizeCreate()` with same `changeId` |
+| `pending` | no index + `changeId` | `insertPending()` then `finalizeCreate()` (Case 1) |
+| any | any | Same key + different payload → **409** |
+
+### Provider idempotency guarantee
+
+`IChangeManagementProvider.create(change)` must be idempotent by canonical `change.changeId`. Proven in `DevelopmentProvider` (upsert) and `FakeChangeManagementProvider` (test adapter).
+
+### Crash cases covered (tests)
+
+| Case | Scenario | Verified |
+|---|---|---|
+| 1 | `changeId` claimed, crash before provider | Resume with same `changeId` |
+| 2 | Provider OK, finalize fails (orphan) | Retry reconciles; orphan log with `idempotencyKey` |
+| 3 | Index finalized, idempotency pending | Heal to `completed` without provider call |
+| 4 | Provider fails | Retry same `changeId` after provider available |
+| — | Concurrent same-key | Single `changeId`, single provider record, single finalized index |
+| — | Failed retry | No second sequence allocation |
+| — | Pending payload conflict | **409** |
+
+### ADO files changed
+
+| Path | Change |
+|---|---|
+| `ChangeManagementService.ts` | Recovery helpers (`tryResolveIdempotentCreate`, `healCompletedIdempotency`); `change.create.recover` log; orphan log includes `idempotencyKey` |
+| `IChangeManagementProvider.ts` | Idempotent create contract (JSDoc) |
+| `FakeChangeManagementProvider.ts` | Upsert-by-`changeId`; create call counter for tests |
+| `KnexIdempotencyRepository.ts` | Idempotent `complete()` (`WHERE state = pending`) |
+| `testHelpers.ts` | Seed helpers, `FaultInjectingChangeIndexRepository` |
+| `ChangeManagementService.recovery.test.ts` | Fault-injection recovery tests (new) |
+| `DevelopmentProvider.test.ts` | Provider idempotency proof (new) |
+| `ChangeManagementService.integration.test.ts` | Concurrent provider/index dedup assertion |
+
+### Tests executed (ADO)
+
+```bash
+yarn workspace backend lint                    # PASS
+yarn workspace backend test --watchAll=false   # PASS 80/80 (19 suites)
+```
+
+### Architecture review answers (F2.1.1)
+
+1. Durable idempotency states — `pending`, `completed` only
+2. `changeId` assigned once per key — **Yes** (`claimChangeId`)
+3. Pending resumed — synchronous retry with stored `changeId`
+4. Provider.create already succeeded — idempotent create + finalize + complete
+5. Safe to call provider.create twice — **Yes** (required contract)
+6. Finalized index + pending idempotency — heal to `completed`, no provider call
+7. Concurrent same-key duplicates — **No** (DB PK + conditional claim + tests)
+8. Recovery cannot complete — **503**, never new `changeId` for same key
+9. Background reconciler required — **No**
+10. Frontend wiring safe after checkpoint — **Conditional GO** after architecture review
+
+### Deviations
+
+| Item | Notes |
+|---|---|
+| Internal `changeId` allocated before client-visible success | Unchanged from F2.1 — client still gets 503 until finalize |
+| No idempotency FK to index | Unchanged — intentional for early reserve |
+| ADO commit SHA | **Pending commit** on `feat/ado-repo-governance` (delta on `0dc3ed4`) |
+
+### Unresolved reliability risks
+
+- External ITSM adapters must implement idempotent create by platform `changeId` before production use
+- Lost `claimChangeId` race may consume an extra sequence number (uniqueness preserved)
+- No TTL/sweeper for abandoned pending requests without retries (acceptable — retry-driven recovery)
+
+### Gate
+
+| Gate | Status |
+|---|---|
+| F2.1.1 idempotency recovery | **Complete** (awaiting review) |
+| Frontend wiring | **STOP** until F2.1.1 review |
+| SharePoint/Jira/ServiceNow | **STOP** |
+
+### ADO commit
+
+**`pending`** on branch `feat/ado-repo-governance` (baseline F2.1: `0dc3ed4`).
+
+```text
+feat(gmud): F2.1.1 idempotency recovery and crash-safe retry semantics
+```
+
+### Bridge commit
+
+**`bb8dea2`** on branch `main` (ADO F2.1.1 commit pending on `feat/ado-repo-governance`).

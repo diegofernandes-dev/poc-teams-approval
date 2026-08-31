@@ -282,6 +282,17 @@ validate → authorize → enrich → idempotency check/reserve
 
 On provider failure: fail-closed 503; no public `changeId`. Idempotency retry after provider failure must not allocate a new `changeId` for the same key+payload once a prior attempt succeeded.
 
+**F2.1.1 recovery semantics (normative clarification):**
+
+- Durable idempotency states: `pending` | `completed` only (internal request-processing; not public GMUD workflow status).
+- Same key + same payload while `pending`: synchronously **resume** the original operation using the stored `changeId` — never allocate a second sequence number.
+- Same key + different payload: **409 CONFLICT** regardless of `pending` or `completed`.
+- Index-as-recovery-evidence: if `change_index.is_finalized` but idempotency is `pending`, heal idempotency to `completed` and return the cached result without a second provider call.
+- Orphan (`change.create.orphan`): provider create succeeded but platform finalize failed — retry with same key must reconcile via idempotent `provider.create(changeId)` + finalize; log includes `idempotencyKey` when present.
+- Provider contract: `IChangeManagementProvider.create` must be idempotent by canonical platform `changeId` (second call returns existing `ProviderReference`, not a duplicate operational record).
+- Recovery incomplete during retry: **503** `PROVIDER_UNAVAILABLE` — never return 201 until index + idempotency are consistent.
+- No background reconciliation worker in F2.1.1 — retry-driven reconciliation only.
+
 ### Failure semantics
 
 Fail-closed:
