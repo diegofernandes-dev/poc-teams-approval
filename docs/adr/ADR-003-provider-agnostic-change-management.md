@@ -34,13 +34,13 @@ The canonical model should include stable domain concepts such as:
 
 - `changeId`;
 - title / summary;
-- application/component reference;
+- `targetRef` (canonical change target reference);
 - requested-by / owner;
 - risk/classification;
-- requested deployment window;
+- requested execution window;
 - rollback plan;
 - status;
-- external URL/provider metadata.
+- external URL/provider metadata (internal to provider boundary — not universal form data).
 
 Provider-specific fields must remain behind the adapter boundary.
 
@@ -64,13 +64,15 @@ If a temporary POC storage provider is required, it must be explicitly labeled n
 
 ## Correlation contract
 
-The pipeline carries only the stable change identifier, for example:
+When a change is executed through an Azure DevOps pipeline, the pipeline **may** carry the stable change identifier for correlation, for example:
 
 ```text
 changeId = CHG-2026-004182
 ```
 
-The Approval Gateway resolves change context through the provider and enriches Teams cards without duplicating the entire change record into Azure DevOps variables.
+Azure DevOps / CD is one **optional** future execution path — not every GMUD implies pipeline → deployment.
+
+Where an Approval Gateway or interaction channel is used, it resolves change context through the provider without duplicating the entire change record into external system variables.
 
 ## Consequences
 

@@ -355,3 +355,104 @@ None between ADO implementation and F1.4 normative contract at time of handoff.
 ### Next recommended slice
 
 Architecture review gate on consolidated ADR set + F1.4 contract. **Do not start F2** until approved.
+
+---
+
+## 9. GMUD F2.0 — Change Management Backend Contract & Architecture
+
+**Checkpoint:** F2.0 — backend contract and architecture scaffold. **STOP** — do not begin F2.1.
+
+### Objective
+
+Define backend architecture for create/get change capabilities without implementing real ITSM providers, Azure DevOps integration, or frontend wiring.
+
+### Architecture decisions (summary)
+
+| Decision | Choice |
+|---|---|
+| Service boundary | `ChangeManagementService` → `IChangeManagementProvider` |
+| Trusted HTTP create fields | targetRef, classification, title, summary, requestedWindow, risk, rollbackPlan, evidence |
+| Server-derived fields | requestedBy (identity), ownerRef/systemRef (catalog), changeId, status, timestamps |
+| changeId ownership | Service-generated before provider write; discarded on provider failure |
+| Minimal status | `submitted` only (no `draft`) |
+| Provider metadata | Internal `ProviderReference` — not in public `Change` |
+| Authorization | `change-management.change.create` / `.read` via Permission Framework |
+| Idempotency | Optional `Idempotency-Key` header |
+| Timezone | `changeManagement.defaultTimezone` → UTC storage |
+
+See [ADR-006](./../adr/ADR-006-change-management-backend-contract.md) for full contract.
+
+### Pre-F2 semantic hygiene
+
+| File | Change |
+|---|---|
+| `docs/adr/ADR-003-provider-agnostic-change-management.md` | `targetRef`, requested execution window, optional ADO correlation |
+| `docs/adr/README.md` | Universal flow ends at controlled execution; ADO/CD as optional path |
+
+### Bridge files changed
+
+| Path | Change |
+|---|---|
+| `docs/adr/ADR-003-provider-agnostic-change-management.md` | Semantic correction |
+| `docs/adr/README.md` | Platform flow + ADR-006 index |
+| `docs/adr/ADR-006-change-management-backend-contract.md` | New — F2 backend contract |
+| `docs/backstage/implementation-progress.md` | This section |
+
+### ADO files changed
+
+| Path | Purpose |
+|---|---|
+| `packages/backend/src/plugins/changeManagementPlugin.ts` | HTTP routes POST/GET |
+| `packages/backend/src/modules/changeManagement/types.ts` | Domain + transport types |
+| `packages/backend/src/modules/changeManagement/permissions.ts` | Permission definitions |
+| `packages/backend/src/modules/changeManagement/validation.ts` | Zod schemas |
+| `packages/backend/src/modules/changeManagement/windowNormalizer.ts` | Timezone → UTC |
+| `packages/backend/src/modules/changeManagement/targetContextResolver.ts` | Catalog owner/system |
+| `packages/backend/src/modules/changeManagement/changeIdGenerator.ts` | Service-owned ID format |
+| `packages/backend/src/modules/changeManagement/errors.ts` | Stable error codes |
+| `packages/backend/src/modules/changeManagement/idempotency.ts` | Key handling |
+| `packages/backend/src/modules/changeManagement/IChangeManagementProvider.ts` | Provider interface |
+| `packages/backend/src/modules/changeManagement/FakeChangeManagementProvider.ts` | In-memory test provider |
+| `packages/backend/src/modules/changeManagement/ChangeManagementService.ts` | create/get orchestration |
+| `packages/backend/src/modules/changeManagement/*.test.ts` | Service, validation, architecture tests |
+| `packages/backend/src/index.ts` | Register plugin |
+| `packages/backend/config/rbac/rbac-policy.csv` | change-management permissions |
+| `packages/backend/src/modules/templateExecutorRoleSeed.ts` | template_executor GMUD permissions |
+| `app-config.yaml` | changeManagement config + pluginsWithPermission |
+
+### Commits
+
+| Repository | Branch | SHA |
+|---|---|---|
+| ADO `platform-devops-developer-portal` | TBD | TBD |
+| Bridge `poc-teams-approval` | `main` | TBD |
+
+### Tests executed (ADO)
+
+```bash
+yarn workspace backend test --watchAll=false   # PASS 61/61 (16 suites)
+yarn workspace backend lint                    # PASS
+yarn tsc                                       # PASS
+```
+
+### Deviations
+
+None between ADO scaffold and ADR-006 at time of handoff.
+
+### Unresolved questions
+
+1. **Multi-timezone** — single org default vs per-system timezone (deferred).
+2. **GET read scope expansion** — team-wide listing deferred to F3.
+3. **Evidence workflow** — F2.0 accepts `evidence: []` only on create.
+4. **Component-only targetRef** — System/Resource targets need future ADR.
+
+### Next recommended slice (F2.1)
+
+1. Development provider with durable persistence
+2. Real changeId sequence
+3. Wire frontend `ChangeManagementApi` to backend
+4. Remove trusted fields from frontend POST payload
+5. Persistent idempotency
+6. **STOP** before SharePoint/Jira/ServiceNow
+
+**F2.0 handoff complete.** Wait for architecture review before F2.1.

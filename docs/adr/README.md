@@ -15,6 +15,7 @@ The branch `docs/architecture-decisions-mvp` is **superseded by `main`** as of G
 | ADR-003 | Change management is provider-agnostic | Accepted |
 | ADR-004 | Teams approvals use delegated Azure DevOps user identity | Proposed / validation required |
 | ADR-005 | CAB scheduling uses deferred approval plus sequential locking | Proposed / partially validated |
+| ADR-006 | Change management backend contract | Accepted (F2.0 architecture) |
 
 ## Platform flow (target)
 
@@ -24,17 +25,26 @@ Developer
   -> Change Management capability (canonical contract)
   -> provider adapter (optional: SharePoint / Jira / ServiceNow)
   -> changeId
-  -> Azure DevOps pipeline
-  -> HML
-  -> PRD Pre-check Approval (manager)
-  -> Teams approval UI (interaction channel)
-  -> PRD Post-check Approval (CAB)
-  -> deferred effective time / release slot
-  -> Exclusive Lock (sequential)
-  -> PRD deployment
+  -> controlled change execution
 ```
 
 SharePoint is **not a mandatory dependency**. Provider selection belongs behind the Change Management capability — not in the developer-facing GMUD creation experience.
+
+### Optional future execution paths (not universal)
+
+The following may apply when a change is executed through Azure DevOps protected resources — they are **not** implied by every GMUD:
+
+```text
+changeId correlation (optional)
+  -> Azure DevOps pipeline / CD
+  -> environment approvals (manager, CAB)
+  -> Teams approval UI (interaction channel)
+  -> deferred effective time / release slot
+  -> Exclusive Lock (sequential)
+  -> deployment to protected environment
+```
+
+See ADR-001, ADR-004, and ADR-005 for ADO/Teams-specific decisions.
 
 Two technical decisions are intentionally not closed yet:
 
