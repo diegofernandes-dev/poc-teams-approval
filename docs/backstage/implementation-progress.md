@@ -653,3 +653,84 @@ Per ADR-007 conditional GO:
 3. Durable idempotency + `changeId` sequence
 4. Wire frontend to backend (separate checkpoint — stop for review after backend persistence)
 5. **STOP** before SharePoint/Jira/ServiceNow
+
+---
+
+## 12. F2.1 backend persistence checkpoint (Model C)
+
+**Checkpoint:** F2.1 durable canonical index + `DevelopmentProvider` (backend only; no frontend wiring).
+
+### ADO implementation summary
+
+| Component | Implementation |
+|---|---|
+| `ChangeIndexRepository` | `KnexChangeIndexRepository` → `change_index` |
+| `IdempotencyRepository` | `KnexIdempotencyRepository` → `change_idempotency` |
+| `ChangeIdGenerator` | `DatabaseChangeIdGenerator` → `change_id_sequences` |
+| `ProviderRegistry` | `DefaultProviderRegistry` — default from `changeManagement.provider` |
+| `DevelopmentProvider` | `development_change_records` — non-production operational store |
+| HTTP routes | Unchanged POST/GET contract |
+| Status | `submitted` only |
+
+### Migration
+
+| File | Tables |
+|---|---|
+| `packages/backend/migrations/change-management/20260831120000_initial.cjs` | `change_index`, `change_idempotency`, `change_id_sequences`, `development_change_records` |
+
+### Tests executed (ADO)
+
+```bash
+yarn workspace backend lint                    # PASS
+yarn workspace backend test --watchAll=false   # PASS 71/71 (17 suites)
+```
+
+Coverage includes: canonical index persistence, immutable `providerKey`, GET routing via stored key, durable idempotency (same-key/conflict/concurrent), platform-owned `changeId`, provider failure 503, auth on historical snapshots, architecture guards (no Model B), degraded read returns 503.
+
+### Deviations
+
+| Item | Notes |
+|---|---|
+| Frontend wiring | **Intentionally deferred** per F2.1 backend-only checkpoint scope |
+| Degraded read | Returns **503** when provider unavailable; explicit `meta.source` deferred to future slice |
+| Idempotency FK | No FK from `change_idempotency.change_id` → `change_index` (allows early reserve before index insert) |
+| Orphan local SQLite | Prior Model B-shaped `changes` table in dev data discarded; fresh Model C migration used |
+
+### Failure / recovery (documented)
+
+| Scenario | Behavior |
+|---|---|
+| Provider fails before finalize | 503 to client; pending index row not visible on GET; idempotency `pending` |
+| Provider succeeds, index finalize fails | Log `change.create.orphan`; 503 to client; idempotent retry via same `Idempotency-Key` |
+| `DevelopmentProvider` (same DB) | `provider.create` + index finalize + idempotency complete in single Knex transaction |
+
+Production ITSM adapters must implement idempotent `create` by platform `changeId` for safe retry.
+
+### Architecture review answers
+
+1. `ChangeManagementService` depends on `IChangeManagementProvider` via `ProviderRegistry` — **Yes**
+2. `providerKey` immutable and persisted — **Yes** (`change_index.provider_key`)
+3. Historical records route to original provider — **Yes** (GET uses stored `providerKey`)
+4. `changeId` platform-owned — **Yes** (`DatabaseChangeIdGenerator`)
+5. Idempotency platform-owned — **Yes** (`IdempotencyRepository`)
+6. `ownerRef`/`systemRef` historical snapshots — **Yes** (no Catalog re-fetch on GET)
+7. Canonical index distinct from provider persistence — **Yes** (separate tables + interface)
+8. Model B accidentally implemented — **No** (`IChangeManagementProvider` active; no monolithic `ChangeRepository`)
+9. Provider succeeds, index finalize fails — Orphan logged; 503; retry runbook documented above
+10. Ready for frontend wiring — **Conditional GO** after architecture review
+
+### Gate
+
+| Gate | Status |
+|---|---|
+| F2.1 backend persistence | **Complete** (awaiting review) |
+| Frontend wiring | **STOP** until review |
+| SharePoint/Jira/ServiceNow | **STOP** |
+
+### ADO commit
+
+Uncommitted on branch `feat/ado-repo-governance` at checkpoint time (baseline F2.0: `b2bed17`).
+
+### Bridge commit
+
+Pending — this section.

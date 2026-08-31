@@ -4,7 +4,7 @@
 > **Canonical architectural branch:** `main` (branch `docs/architecture-decisions-mvp` superseded as of F1.4)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal`  
 > **Active branch:** `feat/ado-repo-governance`  
-> **Last updated:** 2026-08-31 (F2.0 record-authority acceptance)
+> **Last updated:** 2026-08-31 (F2.1 backend persistence checkpoint)
 
 ## Stack
 
@@ -28,48 +28,50 @@
 | Domain model (frontend) | `CreateChangeRequest` — `targetRef`, `classification`, `requestedWindow`, `risk`, `rollbackPlan`, `evidence` |
 | UI | Four numbered form sections + informational right rail (Fluxo da Mudança) |
 
-### Backend (F2.0 — contract scaffold)
+### Backend (F2.1 — durable Model C persistence)
 
 | Item | State |
 |---|---|
 | Plugin | `change-management` (`createBackendPlugin`) |
 | Routes | `POST /api/change-management/changes` · `GET /api/change-management/changes/:changeId` |
 | Service | `ChangeManagementService` |
-| Provider | `IChangeManagementProvider` → `FakeChangeManagementProvider` (in-memory, non-production) |
-| Persistence | **None durable** — fake provider only; **no platform canonical index yet** |
+| Platform index | `ChangeIndexRepository` → `change_index` table (identity, routing, audit snapshot) |
+| Idempotency | `IdempotencyRepository` → `change_idempotency` table (platform-owned) |
+| Sequence | `DatabaseChangeIdGenerator` → `change_id_sequences` table |
+| Provider registry | `ProviderRegistry` — immutable `providerKey` routing per change |
+| Provider | `IChangeManagementProvider` → `DevelopmentProvider` (`providerKey: development`, non-production) |
+| Persistence | SQLite (dev) / Postgres (prod) via `coreServices.database` |
 | Frontend wiring | **Not connected** — `/gmud` still submits to mock |
-| RBAC | `change-management.change.create` / `.read` (contributor, template_executor, platform_admin) |
+| RBAC | `change-management.change.create` / `.read` (unchanged) |
 | Canonical backend contract | [ADR-006](../adr/ADR-006-change-management-backend-contract.md) |
-| Record authority decision | [ADR-007](../adr/ADR-007-change-record-authority.md) — Model C (hybrid index + provider record) |
+| Record authority | [ADR-007](../adr/ADR-007-change-record-authority.md) — Model C |
 
-#### Backend capabilities (F2.0)
+#### Backend capabilities (F2.1)
 
-- Create change with server-trusted `requestedBy`, catalog-derived `ownerRef`/`systemRef` (creation snapshots)
-- Service-owned `changeId` (`CHG-{YYYY}-{seq}` via `changeIdGenerator.ts`); fail-closed on provider error
-- Minimal status: `submitted` only
-- Optional `Idempotency-Key` header (service-owned in-memory store)
-- Timezone normalization via `changeManagement.defaultTimezone`
+- Durable platform canonical index with immutable `providerKey`, `externalId`, creation-time snapshot
+- GET routes: index → stored `providerKey` → provider adapter (not global config)
+- Durable idempotency with early reserve + atomic finalize (`Idempotency-Key` header)
+- Durable platform-owned `changeId` sequence (`CHG-{YYYY}-{seq}`)
+- `DevelopmentProvider` operational records in `development_change_records` (logically isolated)
+- Fail-closed provider errors (503); unfinalized index rows not visible on GET
+- Degraded read: **503** when provider unavailable (snapshot exists but not returned — explicit degraded response deferred)
 
-#### Explicitly not implemented (F2.0)
+#### Explicitly not implemented (F2.1)
 
-- Platform canonical index / durable persistence
 - Real ITSM providers (SharePoint, Jira, ServiceNow)
-- Azure DevOps / pipeline / deployment correlation
 - Frontend → backend integration
 - List/search, detail page, attachments, workflow engine
+- Azure DevOps / pipeline / deployment correlation
 
-### Architecture review outcome (F2.0 checkpoint)
+### Architecture review outcome (F2.1 checkpoint)
 
 | Decision | Outcome |
 |---|---|
-| Canonical record ownership | **Model C** — platform canonical index + ITSM provider operational record |
-| Provider replaceability | API/frontend contract stable; multi-provider read routing via immutable `providerKey` |
-| `changeId` ownership | Platform (`ChangeManagementService` / `changeIdGenerator`) — confirmed in ADO `b2bed17` |
-| Idempotency ownership | Platform service store — confirmed in ADO `b2bed17` |
-| Catalog `ownerRef`/`systemRef` | Creation-time snapshots — not live catalog refs on GET |
-| F2.1 readiness | **Conditional GO** — ADR-007 accepted 2026-08-31; ADO code realigned to `b2bed17` before F2.1 coding |
-
-See [`implementation-progress.md`](./implementation-progress.md) §10–§11 for full review detail, ADO deviations, and realignment.
+| Model | **Model C retained** — `ChangeIndexRepository` + `IChangeManagementProvider` (not Model B monolith) |
+| `providerKey` | Immutable per change; persisted in `change_index` |
+| Historical routing | GET uses stored `providerKey`, not current global config |
+| Orphan record handling | Dev: transactional finalize; prod: log `change.create.orphan` + idempotent retry runbook |
+| Frontend wiring | **Deferred** — awaiting architecture review (next checkpoint) |
 
 ### Normative references
 
@@ -84,22 +86,13 @@ See [`implementation-progress.md`](./implementation-progress.md) §10–§11 for
 - F1.2 before baseline: [`gmud-create-f1.2-after.png`](../ui/screenshots/gmud-create-f1.2-after.png)
 - F1.3+ after capture: manual — see [`screenshots/README.md`](../ui/screenshots/README.md)
 
-## Review gate — conditional GO for F2.1 ADO implementation
+## Review gate — F2.1 backend checkpoint (awaiting architecture review)
 
-F2.0 backend **contract scaffold** and **architecture review** are **complete**.
-Stakeholders accepted Model C on **2026-08-31**:
+F2.1 **backend persistence** is implemented per ADR-007 Model C. Frontend remains mock-backed.
 
-1. [ADR-007](../adr/ADR-007-change-record-authority.md) — record authority (Model C)
-2. [ADR-006](../adr/ADR-006-change-management-backend-contract.md) — clarifications (idempotency, GET routing, snapshots)
-3. [ADR-003](../adr/ADR-003-provider-agnostic-change-management.md) — narrowed replaceability guarantee
+**STOP** before SharePoint/Jira/ServiceNow. **STOP** frontend wiring until F2.1 backend review completes.
 
-**ADO prerequisite:** uncommitted Model B drift (provider-less `ChangeRepository`) was
-identified and **reverted** to `b2bed17` before F2.1 coding. See
-[`implementation-progress.md`](./implementation-progress.md) §11.
-
-F2.1 may proceed per ADR-007 scope (platform canonical index, `DevelopmentProvider`,
-durable idempotency/sequence). **STOP** before SharePoint/Jira/ServiceNow and before
-frontend wiring until the F2.1 backend checkpoint is reviewed.
+See [`implementation-progress.md`](./implementation-progress.md) §12 for checkpoint detail, tests, and deviations.
 
 ## Source-of-truth rules
 
@@ -116,8 +109,10 @@ frontend wiring until the F2.1 backend checkpoint is reviewed.
 | Branch | `feat/ado-repo-governance` |
 | F1.4 commit | `52e01ca` |
 | **F2.0 commit** | **`b2bed17`** (backend contract scaffold) |
+| **F2.1 checkpoint** | **Uncommitted** on `feat/ado-repo-governance` (awaiting ADO commit) |
 | Bridge F2.0 handoff | `4ec7292` · `317b821` · `047dcc6` |
 | **Bridge architecture review** | **`57613ab`** (ADR-007 + §10) |
+| **Bridge F2.1 handoff** | Pending (this checkpoint) |
 
 ## Superseded references
 
