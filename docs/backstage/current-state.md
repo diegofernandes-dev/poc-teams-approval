@@ -118,7 +118,7 @@ See [`implementation-progress.md`](./implementation-progress.md) §13 for checkp
 | Bridge F2.0 handoff | `4ec7292` · `317b821` · `047dcc6` |
 | **Bridge architecture review** | **`57613ab`** (ADR-007 + §10) |
 | **Bridge F2.1 handoff** | **`196949c`** (ADO SHA `0dc3ed4` recorded) |
-| **Bridge F2.1.1 handoff** | **`bb8dea2`** (ADO F2.1.1 commit pending on `feat/ado-repo-governance`) |
+| **Bridge F2.1.1 handoff** | **`a65e1ed`** (ADO F2.1.1 commit pending on `feat/ado-repo-governance`) |
 
 ## Superseded references
 

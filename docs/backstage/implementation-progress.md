@@ -847,4 +847,4 @@ feat(gmud): F2.1.1 idempotency recovery and crash-safe retry semantics
 
 ### Bridge commit
 
-**`bb8dea2`** on branch `main` (ADO F2.1.1 commit pending on `feat/ado-repo-governance`).
+**`a65e1ed`** on branch `main` (ADO F2.1.1 commit pending on `feat/ado-repo-governance`).
