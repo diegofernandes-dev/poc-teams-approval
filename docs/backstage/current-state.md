@@ -109,10 +109,10 @@ See [`implementation-progress.md`](./implementation-progress.md) §12 for checkp
 | Branch | `feat/ado-repo-governance` |
 | F1.4 commit | `52e01ca` |
 | **F2.0 commit** | **`b2bed17`** (backend contract scaffold) |
-| **F2.1 checkpoint** | **Uncommitted** on `feat/ado-repo-governance` (awaiting ADO commit) |
+| **F2.1 commit** | **`0dc3ed4`** (durable Model C backend persistence) |
 | Bridge F2.0 handoff | `4ec7292` · `317b821` · `047dcc6` |
 | **Bridge architecture review** | **`57613ab`** (ADR-007 + §10) |
-| **Bridge F2.1 handoff** | Pending (this checkpoint) |
+| **Bridge F2.1 handoff** | **`c1691f9`** (initial) · updated after ADO `0dc3ed4` |
 
 ## Superseded references
 

@@ -729,8 +729,12 @@ Production ITSM adapters must implement idempotent `create` by platform `changeI
 
 ### ADO commit
 
-Uncommitted on branch `feat/ado-repo-governance` at checkpoint time (baseline F2.0: `b2bed17`).
+**`0dc3ed4`** on branch `feat/ado-repo-governance` (baseline F2.0: `b2bed17`).
+
+```text
+feat(gmud): F2.1 durable canonical index and DevelopmentProvider
+```
 
 ### Bridge commit
 
-Pending — this section.
+**`c1691f9`** (initial F2.1 handoff) — updated in follow-up commit with ADO SHA `0dc3ed4`.
