@@ -112,7 +112,7 @@ See [`implementation-progress.md`](./implementation-progress.md) §12 for checkp
 | **F2.1 commit** | **`0dc3ed4`** (durable Model C backend persistence) |
 | Bridge F2.0 handoff | `4ec7292` · `317b821` · `047dcc6` |
 | **Bridge architecture review** | **`57613ab`** (ADR-007 + §10) |
-| **Bridge F2.1 handoff** | **`c1691f9`** (initial) · updated after ADO `0dc3ed4` |
+| **Bridge F2.1 handoff** | **`196949c`** (ADO SHA `0dc3ed4` recorded) |
 
 ## Superseded references
 

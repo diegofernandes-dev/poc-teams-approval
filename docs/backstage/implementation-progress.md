@@ -737,4 +737,4 @@ feat(gmud): F2.1 durable canonical index and DevelopmentProvider
 
 ### Bridge commit
 
-**`c1691f9`** (initial F2.1 handoff) — updated in follow-up commit with ADO SHA `0dc3ed4`.
+**`196949c`** — records ADO F2.1 commit `0dc3ed4` (follow-up to initial handoff `c1691f9`).
