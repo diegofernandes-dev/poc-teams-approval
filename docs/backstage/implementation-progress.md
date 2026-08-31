@@ -424,8 +424,8 @@ See [ADR-006](./../adr/ADR-006-change-management-backend-contract.md) for full c
 
 | Repository | Branch | SHA |
 |---|---|---|
-| ADO `platform-devops-developer-portal` | TBD | TBD |
-| Bridge `poc-teams-approval` | `main` | TBD |
+| ADO `platform-devops-developer-portal` | `feat/ado-repo-governance` | `b2bed17` |
+| Bridge `poc-teams-approval` | `main` | `8799ff7` |
 
 ### Tests executed (ADO)
 
