@@ -273,8 +273,12 @@ Independent from frontend validation. Minimum invariants:
 
 Duplicate POST handling via optional `Idempotency-Key` header:
 
-- Same key + same payload hash → return existing `{ changeId, status }`
-- Same key + different payload → `409 CONFLICT`
+- The persisted identity is `(operation, requested_by, idempotency_key)`, where
+  `requested_by` is the authenticated actor resolved by the backend. Actor identity
+  supplied by the frontend is never trusted.
+- Same authenticated actor + same key + same payload hash → return existing `{ changeId, status }`
+- Same authenticated actor + same key + different payload → `409 CONFLICT`
+- Different authenticated actors + the same key → independent idempotency namespaces
 - No key → each POST creates a new change (acceptable in dev; key recommended before production)
 
 Idempotency is **service-owned** via `IdempotencyStore` (`idempotency.ts`) — separate from the provider. F2.0 uses an in-memory store; F2.1 uses durable platform storage with a unique key constraint.

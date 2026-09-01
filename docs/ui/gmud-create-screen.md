@@ -1,6 +1,6 @@
 # GMUD create screen — UI implementation contract
 
-> Status: **normative UI reference — F1.4 integrity cleanup**
+> Status: **normative UI reference — F2.1.3 create flow implemented**
 >
 > Related ADRs: [ADR-002](../adr/ADR-002-backstage-change-onramp.md) · [ADR-003](../adr/ADR-003-provider-agnostic-change-management.md) · [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md)
 >
@@ -43,7 +43,7 @@ Production scope is communicated by the page subtitle. Do **not** repeat product
 
 ## Desktop layout
 
-- **main column:** ~75–80% width — **five** numbered form sections in one InfoCard surface (F2.1.2+; four sections until F2.1.3 UI);
+- **main column:** ~75–80% width — **five** numbered form sections in one InfoCard surface;
 - **right rail:** ~20–25% — Fluxo da Mudança, Status, Identificador;
 - responsive: rail stacks below form on narrow screens.
 
@@ -104,7 +104,7 @@ Examples: repository link, build definition, catalog source link, service metada
 - Helper copy when shown: references are from the catalog target, not evidence of the change itself.
 - Do **not** include target context in `evidence[]` on submit in F1.4.
 
-## Section 2 — Plano de execução (F2.1.2+ normative — UI in F2.1.3)
+## Section 2 — Plano de execução (implemented in F2.1.3)
 
 ```text
 2  Plano de execução
@@ -121,15 +121,16 @@ Describes **planned execution activities** — who performs each unit of work. T
 
 Composition:
 
-- Default: **one activity row** pre-populated (empty or with sensible starter copy).
+- Default: **exactly one empty activity**.
 - `[ + Adicionar atividade ]` adds rows; cap at 20 activities.
+- Remove is available only while more than one activity exists; the final activity cannot be removed.
 - Array order is the intended human-readable sequence — no drag-and-drop dependency graph.
 
 **Terminology:** Section 1 **Responsável** = governance owner of the primary target (`ownerRef`). Section 2 **Equipe executora** = team expected to perform that activity (`responsibleRef`). Do not overload "Responsável" for activities.
 
 Canonical model: `executionPlan: { activities: [{ title, description, responsibleRef, targetRef? }] }`. Server assigns `activityId` on create.
 
-**F2.1.3 UI stop condition:** implement this section only when backend F2.1.2 is accepted. Until then, frontend may remain on four sections.
+`Equipe executora` uses Catalog Group entities only. `Alvo opcional` uses Catalog Component entities only and may remain empty. An empty Group catalog leaves the picker empty with safe feedback; arbitrary text is not accepted.
 
 ## Section 3 — Janela de Execução
 
@@ -266,9 +267,17 @@ CreateChangeRequest {
 
 **Removed / not reintroduced:** `environment`, `artifactVersion`, `componentRef`, `provider`, `teamsUserId`, `adoApprovalId`, `cabDeferredApprovalId`
 
-## F1.4 stop condition
+## F2.1.3 submit and confirmation behavior
 
-After integrity cleanup: **STOP**. No backend, persistence, ITSM providers, workflow engine, provider integration, or expanded catalog target types.
+- Normal runtime uses `ChangeManagementApi` backed by Backstage discovery/fetch and POSTs to the backend capability URL.
+- The transport mapper sends only editable business fields and ordered execution activities; contextual/derived/server/provider fields are excluded.
+- One UUID represents one logical submission. It is retained for network, transport, `PROVIDER_UNAVAILABLE`, and other 5xx failures; mutation of any business field invalidates it. Responses 400/403/409 and success clear it. There is no automatic HTTP retry.
+- Success replaces the form with a confirmation containing the canonical POST `changeId` and a snapshot of submitted content. No GET or detail route is required.
+- `Criar outra GMUD` resets the form to exactly one empty activity and no prior idempotency key.
+
+## F2.1.3 stop condition
+
+After the real create path: **STOP**. No ITSM providers, list/detail UI, attachment upload, activity workflow/status/approval/dependencies/execution, Teams, CAB, or Azure DevOps integration.
 
 ## Screenshots
 

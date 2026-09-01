@@ -2,10 +2,10 @@
 
 > **Bridge repository:** `diegofernandes-dev/poc-teams-approval` — architectural handoff (this document)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal` — authoritative source code  
-> **Checkpoint:** F2.0 — Change Management backend contract & architecture (complete) · F1.4 prior  
-> **Prior checkpoints:** F1 (frontend shell) · F1.1 (visual polish) · F1.2 (Backstage-first composition) · F1.3 (semantic UX) · F1.4 (integrity cleanup)  
+> **Checkpoint:** F2.1.3 — frontend execution plan + real backend wiring (implementation complete)
+> **Prior checkpoints:** F1–F1.4 · F2.0 · F2.1 · F2.1.1 · F2.1.2
 > **UI reference:** [`gmud-create-screen.md`](../ui/gmud-create-screen.md) · Backend contract: [ADR-006](../adr/ADR-006-change-management-backend-contract.md)  
-> **Status:** F2.0 complete — **STOP** before F2.1 (architecture review gate)
+> **Status:** F2.1.3 complete — **GO** for authenticated browser functional review; **STOP** before the next slice
 >
 > **Note:** ADO file paths in section 3 are **implementation references** in the Azure DevOps repository, not paths in this bridge repo.
 
@@ -931,3 +931,92 @@ None — ADO implementation matches ADR-008.
 ```text
 feat(gmud): F2.1.2 multi-activity execution plan domain
 ```
+
+---
+
+## 15. F2.1.3 — Frontend execution plan + real backend wiring
+
+### Checkpoint summary
+
+The `/gmud` route now completes the first real creation path:
+
+```text
+GmudCreatePage → ChangeManagementApi → ChangeManagementClient
+→ POST /api/change-management/changes → ChangeManagementService
+→ Model C persistence + DevelopmentProvider
+```
+
+The form has five numbered sections and starts with exactly one empty execution
+activity. It supports 1–20 ordered activities, requires a Catalog Group as
+`responsibleRef`, accepts an optional Catalog Component as activity `targetRef`, and
+does not expose provider, workflow, approval, status, pipeline, or ADO concerns.
+
+Success uses the POST result and a submitted-form snapshot to show the canonical
+`changeId`. No create-time GET, detail route, provider metadata, or automatic HTTP retry
+was introduced.
+
+### ADO files changed
+
+| Area | Files / result |
+|---|---|
+| API abstraction and wiring | `ChangeManagementApi.ts`, `ChangeManagementClient.ts`, `changeManagementErrors.ts`; discovery/fetch real client is the default; mock remains test/fixture-only |
+| Form and success UX | `GmudCreatePage.tsx`, `GmudForm.tsx`, `GmudCreatedSummary.tsx`, `ApprovalFlowRail.tsx`, `gmudCreateStyles.ts` |
+| Trusted transport and retry helpers | `buildCreateHttpBody.ts`, `gmudFormValidation.ts`, `idempotencyKey.ts`, `mapChangeManagementError.ts` |
+| Public frontend types | `model/types.ts`, `index.ts`; `CreateChangeHttpBody.executionPlan` is required and create is the only API operation in this slice |
+| Frontend tests/config | API client, form, submit, payload, validation, error, model, and plugin wiring tests; plugin Jest worker cap |
+| Backend proof only | `ChangeManagementService.test.ts` proves actor A/key X and actor B/key X are independent; no backend implementation, schema, provider contract, or migration changed |
+
+### Idempotency decision
+
+Backend inspection confirmed the existing durable key is
+`(operation, requested_by, idempotency_key)`. The actor is obtained from backend
+authentication, never from frontend input. Therefore:
+
+- same actor + key + same payload returns the original result;
+- same actor + key + different payload returns 409;
+- different actors + the same key use independent namespaces.
+
+The frontend creates one UUID on the first valid submit, reuses it after network/
+transport failures, `PROVIDER_UNAVAILABLE`, or another 5xx, and invalidates it after
+any scalar or activity mutation. It clears the key on 400/403/409 and after success.
+
+### Required verification
+
+```text
+yarn workspace @internal/plugin-change-management test --watchAll=false  PASS (40/40, 10 suites)
+yarn workspace @internal/plugin-change-management lint                   PASS
+yarn workspace @internal/plugin-change-management build                  PASS
+yarn workspace backend test --watchAll=false                             PASS (89/89, 20 suites)
+yarn workspace backend lint                                              PASS
+git diff --check                                                          PASS
+```
+
+### Final review answers
+
+1. Real frontend uses `ChangeManagementApi` — **Yes**.
+2. `MockChangeManagementApi` inactive in normal runtime — **Yes**; tests/fixtures only.
+3. POST excludes `requestedBy` / `ownerRef` / `systemRef` — **Yes**.
+4. `executionPlan` always has at least one activity — **Yes**; UI and backend validation.
+5. `responsibleRef` selected as Catalog Group — **Yes**.
+6. `activityId` backend-only — **Yes**.
+7. Same logical retry reuses `Idempotency-Key` — **Yes** for retryable failures.
+8. Form mutation produces a new key — **Yes**, including activity changes.
+9. Idempotency scoped to authenticated actor — **Yes**, existing composite key plus explicit test.
+10. Canonical backend `changeId` displayed after success — **Yes**, from POST without GET.
+11. Provider/ADO/workflow concern leaked into frontend — **No**.
+12. End-to-end create path ready for functional review — **Yes: GO**; login and authenticated browser creation are the functional review.
+
+### Deviations and known observations
+
+- No architecture/domain deviation and no ADR-008 change.
+- The plan's `PROVIDER_UNAVAILABLE` error code is used exactly; no obsolete `PERSISTENCE_UNAVAILABLE` frontend mapping remains.
+- The extra repository-wide `yarn tsc:full` diagnostic (not a required gate) still reports pre-existing third-party Backstage/react-use declaration conflicts and existing Knex typing errors in `changeManagementPlugin.ts`. Package build and both required lints pass.
+- Jest emits existing React/MUI `findDOMNode` deprecation warnings; they do not fail tests.
+- Authenticated browser login/create was intentionally not automated here; it is the requested functional review gate.
+
+### Commits and gate
+
+- ADO: **`75da44fb46d308e23b1c987e2093636fa4811b92`** on `feat/ado-repo-governance` (baseline `5e4f30e`).
+- Bridge: this handoff commit on `main` (baseline `412822bc89df4058e0649c812bb4e7e4296a3c01`).
+- Functional review: **GO**.
+- Next implementation slice: **STOP** pending architecture review.
