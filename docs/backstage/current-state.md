@@ -114,11 +114,11 @@ See [`implementation-progress.md`](./implementation-progress.md) §13 for checkp
 | F1.4 commit | `52e01ca` |
 | **F2.0 commit** | **`b2bed17`** (backend contract scaffold) |
 | **F2.1 commit** | **`0dc3ed4`** (durable Model C backend persistence) |
-| **F2.1.1 commit** | **`pending`** on `feat/ado-repo-governance` (idempotency recovery — see §13) |
+| **F2.1.1 commit** | **`ed6810b`** (idempotency recovery — see §13) |
 | Bridge F2.0 handoff | `4ec7292` · `317b821` · `047dcc6` |
 | **Bridge architecture review** | **`57613ab`** (ADR-007 + §10) |
 | **Bridge F2.1 handoff** | **`196949c`** (ADO SHA `0dc3ed4` recorded) |
-| **Bridge F2.1.1 handoff** | **`a65e1ed`** (ADO F2.1.1 commit pending on `feat/ado-repo-governance`) |
+| **Bridge F2.1.1 handoff** | **`a65e1ed`** · **`44729aa`** (ADO SHA `ed6810b` recorded below) |
 
 ## Superseded references
 

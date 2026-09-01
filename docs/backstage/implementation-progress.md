@@ -821,7 +821,7 @@ yarn workspace backend test --watchAll=false   # PASS 80/80 (19 suites)
 |---|---|
 | Internal `changeId` allocated before client-visible success | Unchanged from F2.1 — client still gets 503 until finalize |
 | No idempotency FK to index | Unchanged — intentional for early reserve |
-| ADO commit SHA | **Pending commit** on `feat/ado-repo-governance` (delta on `0dc3ed4`) |
+| ADO commit SHA | **`ed6810b`** on `feat/ado-repo-governance` (baseline F2.1: `0dc3ed4`) |
 
 ### Unresolved reliability risks
 
@@ -839,7 +839,7 @@ yarn workspace backend test --watchAll=false   # PASS 80/80 (19 suites)
 
 ### ADO commit
 
-**`pending`** on branch `feat/ado-repo-governance` (baseline F2.1: `0dc3ed4`).
+**`ed6810b`** on branch `feat/ado-repo-governance` (baseline F2.1: `0dc3ed4`).
 
 ```text
 feat(gmud): F2.1.1 idempotency recovery and crash-safe retry semantics
@@ -847,4 +847,4 @@ feat(gmud): F2.1.1 idempotency recovery and crash-safe retry semantics
 
 ### Bridge commit
 
-**`a65e1ed`** on branch `main` (ADO F2.1.1 commit pending on `feat/ado-repo-governance`).
+**`a65e1ed`** · **`44729aa`** on branch `main` (ADO SHA `ed6810b` recorded in this update).
