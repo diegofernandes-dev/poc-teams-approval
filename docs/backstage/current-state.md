@@ -4,7 +4,7 @@
 > **Canonical architectural branch:** `main` (branch `docs/architecture-decisions-mvp` superseded as of F1.4)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal`  
 > **Active branch:** `feat/ado-repo-governance`  
-> **Last updated:** 2026-09-01 (F2.2 — My Changes List + Change Detail)
+> **Last updated:** 2026-09-01 (F2.2.1 — Participant Read Policy)
 
 ## Stack
 
@@ -43,11 +43,11 @@
 | Persistence | SQLite (dev) / Postgres (prod) via `coreServices.database`, real knex migrations |
 | Frontend wiring | **Connected** — create, list, and detail all call the real backend |
 | RBAC | `change-management.change.create` / `.read` (contributor, template_executor, platform_admin) — `.read` also gates `GET /changes` |
-| Canonical backend contract | [ADR-006](../adr/ADR-006-change-management-backend-contract.md) (HTTP contract + list read scope) |
+| Canonical backend contract | [ADR-006](../adr/ADR-006-change-management-backend-contract.md) (HTTP contract + participant read scope) |
 | Record authority | [ADR-007](../adr/ADR-007-change-record-authority.md) — Model C (hybrid index + provider record) + discovery/detail clarification |
-| Execution plan domain | [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md) — F2.1.2 |
+| Execution plan domain | [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md) — F2.1.2, read-visibility clause superseded by F2.2.1 |
 
-#### Backend capabilities (F2.2)
+#### Backend capabilities (F2.2.1)
 
 - Durable platform canonical index with immutable `providerKey`, `externalId`, creation-time snapshot
 - GET routes: index → stored `providerKey` → provider adapter (not global config)
@@ -57,9 +57,10 @@
 - Fail-closed provider errors (503); unfinalized index rows not visible on GET or list
 - `executionPlan` / `ExecutionActivity` on canonical `Change`; catalog-validated `responsibleRef` (Group) and optional activity `targetRef`
 - Actor-scoped idempotency: `(operation, requested_by, idempotency_key)` — different actors may independently reuse the same key
-- **New in F2.2:** `GET /changes` — actor-scoped discovery from the canonical index, identical authorization predicate as `GET /:changeId`, zero provider calls; `ChangeSummary` projection with no provider metadata
+- `GET /changes` (F2.2) — participant-scoped discovery from the canonical index, identical authorization predicate as `GET /:changeId`, zero provider calls; `ChangeSummary` projection with no provider metadata
+- **New in F2.2.1:** `canReadChange` (shared by list and detail) grants read to any actor whose `ownershipEntityRefs` includes `change.ownerRef` **or any** `executionPlan.activities[].responsibleRef` — the **change participant** read policy. Read only; no ownership/approval/CAB/edit/execution authority. Backed by a derived, non-authoritative discovery index (`change_index_activity_participants`), backfilled by migration; `canReadChange` against the immutable snapshot remains the sole authorization truth.
 
-#### Explicitly not implemented (F2.2)
+#### Explicitly not implemented (F2.2.1)
 
 - Real ITSM providers (SharePoint, Jira, ServiceNow)
 - Azure DevOps / pipeline / deployment correlation
@@ -67,8 +68,9 @@
 - Teams, CAB scheduling
 - Evidence upload, editing, deletion
 - Team-wide / enterprise-wide search, filters, sorting frameworks (deferred to F3)
+- New governance roles (`change.read.all`, Change Manager, Auditor) (deferred to F3)
 
-### Architecture review outcome (cumulative through F2.2)
+### Architecture review outcome (cumulative through F2.2.1)
 
 | Decision | Outcome |
 |---|---|
@@ -81,8 +83,9 @@
 | Catalog `ownerRef`/`systemRef` | Creation-time snapshots — not live catalog refs on GET or list |
 | Frontend wiring | Complete as of F2.1.3 — real create client, no create-time GET |
 | List vs. detail authority (F2.2) | List = index snapshot (discovery only); detail = provider-authoritative, unchanged routing |
+| Read visibility (F2.2.1) | **Change participant** policy — `platform_admin` OR requester OR `ownerRef` team OR any activity `responsibleRef` team; read only, no other authority; supersedes ADR-008's F2.1.2 "responsibleRef grants no read access" clause |
 
-See [`implementation-progress.md`](./implementation-progress.md) §12–§16 for full checkpoint detail (F2.1, F2.1.1, F2.1.2, F2.1.3, F2.2).
+See [`implementation-progress.md`](./implementation-progress.md) §12–§17 for full checkpoint detail (F2.1, F2.1.1, F2.1.2, F2.1.3, F2.2, F2.2.1).
 
 ### Normative references
 
@@ -91,14 +94,43 @@ See [`implementation-progress.md`](./implementation-progress.md) §12–§16 for
 - Backend contract: [ADR-006](../adr/ADR-006-change-management-backend-contract.md)
 - Record authority: [ADR-007](../adr/ADR-007-change-record-authority.md)
 - Execution plan domain: [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md)
-- Handoff detail: [`implementation-progress.md`](./implementation-progress.md) §9–§16
+- Handoff detail: [`implementation-progress.md`](./implementation-progress.md) §9–§17
 
 ### Visual baseline
 
 - F1.2 before baseline: [`gmud-create-f1.2-after.png`](../ui/screenshots/gmud-create-f1.2-after.png)
 - F1.3+ after capture: manual — see [`screenshots/README.md`](../ui/screenshots/README.md)
 
-## Review gate — F2.2 complete, STOP before F3
+## Review gate — F2.2.1 complete, STOP before F3
+
+**F2.2.1** closes the domain contradiction ADR-008 (F2.1.2) left open: an activity
+`responsibleRef` team could be assigned execution responsibility without being able
+to read the GMUD that assigns it. Adds the **change participant** read policy on
+top of the F2.2 discovery baseline:
+
+1. `canReadChange` (shared by list and detail — unchanged sharing from F2.2) gains
+   a fourth clause: any `executionPlan.activities[].responsibleRef` membership grants
+   read, alongside `platform_admin` / requester / `ownerRef` team
+2. New derived, non-authoritative discovery index `change_index_activity_participants`
+   (backfilled by migration) narrows the list query's SQL candidates; the snapshot
+   predicate remains the sole authorization truth
+3. List/detail authorization proven identical for every participant class, including
+   activity-responsible teams, by construction and by test
+4. Read only — `responsibleRef` grants no ownership, approval, CAB, edit, or execution
+   authority; ADR-008's F2.1.2 decision text is preserved with a superseded-by note,
+   not rewritten
+5. No workflow, approvals, activity status, Teams, CAB, new governance roles, or
+   enterprise-wide search introduced
+
+**STOP before F3** — approvals, workflow, activity lifecycle statuses, real ITSM
+providers, Teams, CAB, Azure DevOps correlation, evidence upload, editing, new
+governance roles (`change.read.all` / Change Manager / Auditor), and team-wide/
+enterprise search all require a separate architecture review.
+
+See [`implementation-progress.md`](./implementation-progress.md) §17 for checkpoint
+detail.
+
+## Review gate — F2.2 complete, STOP before F3 (superseded by F2.2.1 gate above)
 
 **F2.2** adds My Changes List + Change Detail on top of the F2.1.3 real-backend
 baseline (create → discover → open → read):
@@ -160,14 +192,16 @@ See [`implementation-progress.md`](./implementation-progress.md) §14 for checkp
 | F2.1.1 commit | `ed6810b` (idempotency recovery, crash-safe retry) |
 | F2.1.2 commit | `5e4f30e` (multi-activity execution plan domain) |
 | F2.1.3 commit | `75da44fb46d308e23b1c987e2093636fa4811b92` (execution plan wired to real backend) |
-| **F2.2 commit** | **`0b9cb38`** (My Changes List + Change Detail) |
+| F2.2 commit | `0b9cb38` (My Changes List + Change Detail) |
+| **F2.2.1 commit** | **`6e28611`** (participant read policy) |
 | Bridge F2.0 handoff | `4ec7292` · `317b821` · `047dcc6` |
 | Bridge architecture review | `57613ab` (ADR-007 + §10) |
 | Bridge F2.1 handoff | `196949c` (ADO SHA `0dc3ed4` recorded) |
 | Bridge F2.1.1 handoff | `a65e1ed` · `44729aa` · `afaaaf6` (ADO SHA `ed6810b`) |
 | Bridge F2.1.2 handoff | `afb154b` · `75b4f38` (ADR-008; ADO SHA `5e4f30e`) |
 | Bridge F2.1.3 handoff | `f5f131f` (ADO SHA `75da44fb46d308e23b1c987e2093636fa4811b92`) |
-| **Bridge F2.2 handoff** | **`83a2b79`** (reconciliation merge, `main`) — first drafted as `424e615` before fetching `f5f131f` |
+| Bridge F2.2 handoff | `83a2b79` (reconciliation merge, `main`) — first drafted as `424e615` before fetching `f5f131f` |
+| **Bridge F2.2.1 handoff** | **`PENDING_BRIDGE_COMMIT_SHA`** (ADO SHA `6e28611` recorded) |
 
 ## Superseded references
 
@@ -179,4 +213,6 @@ See [`implementation-progress.md`](./implementation-progress.md) §14 for checkp
 | F2.0 "STOP before F2.1" gate | **Passed** — ADR-007 accepted 2026-08-31; ADO realigned to `b2bed17` |
 | F2.1.2 "STOP before F2.1.3" gate | **Passed** — see F2.1.3 checkpoint above |
 | F2.1.3 "STOP before next slice" gate | **Passed** — GO given for functional review; F2.2 proceeded as the next slice |
-| F2.2 "STOP before F3" gate | **Active** — do not begin approvals/workflow/real providers/Teams/CAB without review |
+| F2.2 "STOP before F3" gate | **Passed** — F2.2.1 proceeded as the next slice (authorization hardening, not F3) |
+| ADR-008 "responsibleRef grants no read access" (F2.1.2) | Superseded for read visibility by ADR-006 "Participant read scope (F2.2.1)" — decision text preserved as historical record |
+| F2.2.1 "STOP before F3" gate | **Active** — do not begin approvals/workflow/real providers/Teams/CAB/new governance roles without review |

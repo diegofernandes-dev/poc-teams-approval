@@ -239,27 +239,53 @@ Registered via `coreServices.permissionsRegistry.addPermissions()`.
 
 Enforced in routes via `coreServices.permissions.authorize()`.
 
-**GET read scope (minimal F2.0):**
+**GET read scope (minimal F2.0, superseded — see "Participant read scope (F2.2.1)" below):**
 
 - `platform_admin` → any change
 - Otherwise → `change.requestedBy === actor.userEntityRef` **OR** actor `ownershipEntityRefs` includes `change.ownerRef`
 
-### List read scope (F2.2)
+### Participant read scope (F2.2.1)
 
-`GET /changes` uses the **identical predicate** as `GET /changes/:changeId` above — not a
-separately maintained rule. The service re-runs `canReadChange(snapshot, actor)` against
-every row the index query returns, so a change a user cannot open by `changeId` can never
-appear in their list either.
+`GET /changes/:changeId` and `GET /changes` (list) share one predicate,
+`canReadChange(snapshot, actor)`, called from both code paths — not two independently
+maintained rules. The list service re-runs it against every row the index query returns, so
+a change a user cannot open by `changeId` can never appear in their list either, and vice
+versa.
 
-`ExecutionActivity.responsibleRef` grants **no** read access, on list or on detail — an
-actor who is only a member of an activity's responsible team, and neither the requester
-nor the change owner, sees nothing. That remains a future policy decision, not implemented
-here.
+An actor may read a change when **any** of the following hold. This is the **change
+participant** definition:
 
-This supersedes the F2.0 line above only for **the requester's own actor-scoped list**
-(own + owned changes, `platform_admin` sees all). **Team-wide / enterprise-wide search
-across other actors' changes remains deferred to F3** — F2.2 does not introduce a query
-language, filters, or cross-team discovery.
+1. `platform_admin` (administrative override) — any change.
+2. `change.requestedBy === actor.userEntityRef` — the requester.
+3. `actor.ownershipEntityRefs` includes `change.ownerRef` — the change governance owner team.
+4. `actor.ownershipEntityRefs` includes **any**
+   `change.executionPlan.activities[].responsibleRef` — an execution activity responsible
+   team.
+
+Clause 4 supersedes the F2.1.2/F2.2 rule ("`responsibleRef` grants no read access") recorded
+in [ADR-008](./ADR-008-multi-activity-change-execution-plan.md#authorization). A team
+assigned execution responsibility for one activity in a multi-team GMUD (e.g. DBA, Network)
+can now discover and open that GMUD even when it is neither the requester nor the
+`ownerRef` team.
+
+**Read only.** `responsibleRef` grants no GMUD ownership, approval authority, manager
+approval, CAB authority, deployment approval, edit permission, or execution orchestration
+permission. Those remain separate, unimplemented concepts.
+
+**Discovery source.** List authorization is evaluated against the platform canonical index's
+immutable creation-time snapshot (`requestedBy`, `ownerRef`,
+`executionPlan.activities[].responsibleRef` as persisted at create) — never re-resolved from
+live Catalog per read. A derived, non-authoritative discovery index
+(`change_index_activity_participants`, keyed by `change_id` / `participant_ref`) narrows the
+list query's candidate rows; `canReadChange` against the snapshot remains the sole
+authorization truth, so that index can only narrow candidates, never grant access on its
+own.
+
+This still supersedes the F2.0 line above only for **the actor's own participant-scoped
+list** (own + owned + activity-responsible changes; `platform_admin` sees all).
+**Team-wide / enterprise-wide search across other actors' changes remains deferred to F3**
+— F2.2.1 does not introduce a query language, filters, cross-team discovery, or a new
+governance role such as `change.read.all` / Change Manager / Auditor.
 
 ### Validation (backend)
 

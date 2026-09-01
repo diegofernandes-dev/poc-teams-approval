@@ -1185,3 +1185,182 @@ architecture review:
 **F2.2 handoff complete.** Wait for architecture review before F3.
 
 ---
+
+## 17. GMUD F2.2.1 — Participant Read Policy
+
+### Problem
+
+F2.2's read policy (`platform_admin` / requester / `change.ownerRef` team) contradicted
+ADR-008 (F2.1.2): `ExecutionActivity.responsibleRef` identifies the Catalog Group
+responsible for executing an activity, but F2.1.2 explicitly withheld read access from it.
+A team assigned execution responsibility for one activity in a multi-team GMUD (e.g. DBA,
+Network on a Payments-owned change) could not read the GMUD that assigned it that
+responsibility.
+
+### Decision — change participant read policy
+
+An actor may read a change when **any** hold: `platform_admin` (override), requester,
+`ownerRef` team membership, or membership in **any**
+`executionPlan.activities[].responsibleRef`. This is the **change participant**
+definition. **Read only** — no ownership, approval, CAB, manager approval, deployment
+approval, edit, or execution orchestration authority. Full rationale and predicate:
+[ADR-006 "Participant read scope (F2.2.1)"](../adr/ADR-006-change-management-backend-contract.md#participant-read-scope-f221).
+ADR-008's F2.1.2 decision text is preserved with a superseded-by note, not rewritten — the
+meaning of `responsibleRef` itself did not change.
+
+### DB strategy — derived participant index (chosen over post-filter or JSON-aware SQL)
+
+`responsibleRef` values live inside `change_index.execution_plan_json` (TEXT). Three
+options were weighed:
+
+- **In-memory post-filter** — drop the SQL predicate, filter every finalized row in the
+  service. Smallest diff, but the `LIMIT 50` can no longer be applied in SQL — it becomes a
+  full-table read per list call. Rejected as the scalability trap the brief warned against.
+- **Dialect-specific JSON filtering** — `json_each` (SQLite) / `jsonb_array_elements`
+  (Postgres) inline in the query. No new table, correct `LIMIT`, but two dialect branches,
+  and the Postgres path is never exercised by the SQLite-backed test suite — an untested
+  production code path. Rejected.
+- **Derived participant index table (chosen)** — new
+  `change_index_activity_participants(change_id, participant_ref)`, written alongside
+  `change_index` inside `KnexChangeIndexRepository.insertPending` (same transaction, no new
+  repository class), backfilled by migration for existing rows. One dialect-neutral SQL
+  predicate (`change_id IN (SELECT change_id FROM ... WHERE participant_ref IN (...))`),
+  `LIMIT` stays a real query bound, indexable. The table is explicitly documented (schema
+  comment + ADR-006) as a **derived discovery index, not an authorization source of
+  truth** — `canReadChange` still re-checks every returned row against the immutable
+  `change_index` snapshot, so the participant table can only narrow candidates, never grant
+  access on its own.
+
+### Files changed (ADO)
+
+| File | Change |
+|---|---|
+| `packages/backend/migrations/change-management/20260901180000_add_activity_participant_index.cjs` | New table `change_index_activity_participants` (composite PK, indexed `participant_ref`, FK to `change_index`); backfills from existing `execution_plan_json` rows |
+| `persistence/changeIndexMapper.ts` | New `changeToActivityParticipantRows` (de-duplicated per change) and `getActivityParticipantsQuery` |
+| `persistence/KnexChangeIndexRepository.ts` | `insertPending` now writes `change_index` + participant rows in one transaction; `listReadable` adds a third `orWhereIn` clause (subquery on the new table) to the `scope: 'actor'` predicate |
+| `persistence/types.ts` | `ChangeIndexListFilter`'s `scope: 'actor'` variant gains `activityResponsibleRefs: string[]` |
+| `ChangeManagementService.ts` | `canReadChange` (already the single helper shared by `listChanges` and `getChange`) gains a fourth clause: any `executionPlan.activities[].responsibleRef` membership; `listChanges` passes `activityResponsibleRefs: actor.ownershipEntityRefs` |
+| `architecture.test.ts` | Model C guard extended to also forbid `ParticipantRepository` / `TaskRepository` / `WorkflowRepository` in the service source |
+| `ChangeManagementService.list.test.ts` | Inverted test asserting the *old* "responsibleRef grants no access" rule replaced with an F2.2.1 participant-policy describe block; `seedIndex` test helper now also writes participant rows |
+| `ChangeManagementService.test.ts` | Two new detail-level tests: activity-responsible actor can `getChange`; unrelated actor is `FORBIDDEN` |
+
+No frontend files changed — `canReadChange` is server-side only; the UI needed no change
+per §Frontend of the F2.2.1 brief (list/detail rendering and 403/404/503 handling are
+policy-agnostic).
+
+### Commits
+
+| Repository | Branch | SHA |
+|---|---|---|
+| ADO `platform-devops-developer-portal` | `feat/ado-repo-governance` | `6e28611` |
+| Bridge `poc-teams-approval` | `main` | `PENDING_BRIDGE_COMMIT_SHA` |
+
+### Cross-team fixture and results
+
+Per the brief's §13 fixture (`requestedBy: alice`, `ownerRef: payments`, activities:
+`dba` / `network` / `payments`):
+
+| Actor | Relationship | Result |
+|---|---|---|
+| alice | requester | READ |
+| payments | `ownerRef` + activity #3 | READ |
+| dba | activity #1 only | READ |
+| network | activity #2 only (ordering does not affect authorization) | READ |
+| hr | none | DENY |
+| platform_admin | override | READ |
+
+List/detail consistency was asserted for every class above via `it.each` over readable and
+denied actor sets against one seeded change, rather than a single test with conditional
+assertions (ESLint `jest/no-conditional-expect` flags branching `expect()` calls — the split
+into two `it.each` blocks is both lint-clean and a more explicit per-class test).
+
+### Tests executed (ADO)
+
+```bash
+yarn workspace backend test --watchAll=false --testPathPatterns=changeManagement
+# PASS 9 suites / 68 tests (12 new: 10 in ChangeManagementService.list.test.ts, 2 in
+# ChangeManagementService.test.ts)
+
+yarn workspace @internal/plugin-change-management test --watchAll=false
+# PASS 13 suites / 58 tests — unchanged from F2.2; no frontend source touched
+
+yarn workspace backend lint     # PASS
+yarn workspace @internal/plugin-change-management lint   # PASS
+yarn tsc
+# Same 5 pre-existing errors in changeManagementPlugin.ts (dual-knex-package type
+# mismatch, present since before F2.2, confirmed via `git diff --stat` touching none of
+# its lines) — zero new errors from F2.2.1
+```
+
+### Migration verification (checkpoint §6 of the brief)
+
+The real dev database (`packages/backend/data/change-management.sqlite`) was held open by
+a running `yarn start` process (confirmed via `lsof`), so it was not touched directly.
+Instead, a copy was made to the session scratchpad, the new migration was run against the
+copy with a temporary, non-committed script, and the resulting
+`change_index_activity_participants` table was queried:
+
+```json
+[
+  { "change_id": "CHG-2026-000001", "participant_ref": "group:default/cloud_azure_devops_platform_engineering" },
+  { "change_id": "CHG-2026-000001", "participant_ref": "group:default/cloud_azure_devops_platform_devops" }
+]
+```
+
+Confirms the backfill correctly extracted both distinct `responsibleRef` values from the
+one real record's `execution_plan_json` (a two-activity plan). The scratch copy and script
+were deleted after the run; `git status` on `packages/backend/data/` shows no changes to
+the live dev database.
+
+### Performance note (brief §18)
+
+Per list call: one indexed subquery on `participant_ref` (composite PK plus a dedicated
+index on that column), then at most 50 rows × up to 20 activities = at most 1000 string
+comparisons inside `canReadChange`. `execution_plan_json` was already being parsed per row
+in `indexRowToRecord` before this change — no new JSON-parsing cost. Participant rows are
+written once at create and never mutated (immutable creation-time snapshot), so the index
+never needs updating. Acceptable at F2 scale.
+
+Future concerns, recorded but not implemented (per the brief's explicit "do not
+prematurely optimize"): `change_index.created_at` still has no dedicated index (carried
+over from the F2.2 handoff); a composite `(participant_ref, change_id)` index on the new
+table would only matter at enterprise-wide row counts, well beyond F2 scope.
+
+### Deviations
+
+None between the ADO implementation and ADR-006 (as amended for F2.2.1) at time of
+handoff — the four-clause participant predicate, the read-only semantics, and the
+DB strategy all match what is documented.
+
+One test intentionally inverted rather than deleted: `ChangeManagementService.list.test.ts`
+previously asserted `'does not grant access via ExecutionActivity.responsibleRef'`
+(the F2.1.2/F2.2 policy). That test's premise is now false by design; it was replaced with
+an equivalent-shaped set of tests asserting the opposite, under a new
+`'F2.2.1 — participant read policy'` describe block, rather than silently deleted.
+
+### Unresolved questions
+
+1. Team-wide/enterprise-wide search across other actors' changes remains deferred to F3 —
+   unchanged from F2.2.
+2. `created_at` still has no dedicated index — unchanged from F2.2, still acceptable at
+   dev scale.
+3. New governance roles (`change.read.all`, Change Manager, Auditor) remain deferred to F3
+   — unchanged from the brief's explicit scope.
+
+### Next recommended slice (F3)
+
+Unchanged from the F2.2 handoff — per the brief's explicit STOP condition, do **not** begin
+without a separate architecture review:
+
+1. Approvals / workflow / activity lifecycle statuses
+2. Real ITSM providers (SharePoint, Jira, ServiceNow)
+3. Teams, CAB scheduling
+4. Azure DevOps / pipeline / deployment correlation
+5. Evidence upload, editing, deletion
+6. Team-wide / enterprise listing and search
+7. New governance roles (`change.read.all` / Change Manager / Auditor)
+8. **STOP** before any of the above without review
+
+**F2.2.1 handoff complete.** Wait for architecture review before F3.
+
+---

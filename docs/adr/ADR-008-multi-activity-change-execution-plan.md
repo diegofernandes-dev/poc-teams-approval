@@ -98,6 +98,8 @@ Persist **full immutable creation-time `executionPlan` snapshot** (with server-a
 
 **`responsibleRef` does NOT grant read access in F2.1.2.** GET scope unchanged: `platform_admin`, `requestedBy`, or `change.ownerRef` membership. Team-scope read for activity-responsible groups is an F3 policy question.
 
+> **Superseded for read visibility by [ADR-006 "Participant read scope (F2.2.1)"](./ADR-006-change-management-backend-contract.md#participant-read-scope-f221)** — `responsibleRef` now grants read access to an activity's responsible team. It still grants no ownership, approval, or execution authority; the decision above is preserved as the historical F2.1.2 record.
+
 ### Idempotency
 
 `executionPlan` is part of `CreateChangeHttpRequest` and the payload hash. Same `Idempotency-Key` + different activities → `409 CONFLICT`. `activityId` is server-assigned and excluded from client hash input.

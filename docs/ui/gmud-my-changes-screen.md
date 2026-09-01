@@ -1,8 +1,8 @@
 # GMUD my changes screen — UI implementation contract
 
-> Status: **normative UI reference — F2.2 discovery surface**
+> Status: **normative UI reference — F2.2 discovery surface, F2.2.1 participant read policy**
 >
-> Related ADRs: [ADR-006](../adr/ADR-006-change-management-backend-contract.md) ("List read scope (F2.2)") · [ADR-007](../adr/ADR-007-change-record-authority.md) ("Clarification — discovery/listing vs. detail authority")
+> Related ADRs: [ADR-006](../adr/ADR-006-change-management-backend-contract.md) ("Participant read scope (F2.2.1)") · [ADR-007](../adr/ADR-007-change-record-authority.md) ("Clarification — discovery/listing vs. detail authority") · [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md) (`responsibleRef`)
 >
 > Related UI: [`gmud-create-screen.md`](./gmud-create-screen.md) · [`gmud-detail-screen.md`](./gmud-detail-screen.md)
 
@@ -15,7 +15,11 @@ a user must never have to ask after creating a GMUD:
 
 The screen must answer:
 
-1. **WHICH** GMUDs am I allowed to see?
+1. **WHICH** GMUDs am I allowed to see? As of F2.2.1 this means: GMUDs I requested,
+   GMUDs owned by a team I belong to, and GMUDs where a team I belong to is the
+   responsible executor of at least one activity — i.e. GMUDs I **participate**
+   in. The label "Minhas GMUDs" is kept unchanged; it now reads as "GMUDs I
+   participate in" rather than only "GMUDs I own or requested".
 2. **WHAT** is each one, at a glance (title, classification, status, window, target, responsible)?
 3. **HOW** do I open one, or start a new one?
 
