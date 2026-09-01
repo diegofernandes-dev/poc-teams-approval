@@ -106,10 +106,12 @@ without changing the F2.2.1 implementation:
 | DevOps | Policy/control/integration/observability/exception owner; absent from happy-path per-deploy approval |
 | Model C | Retained; bounded platform authorization ledger sits beside the index while provider owns operational GMUD detail |
 
-**Gate:** architecture is ready for stakeholder review but **NO-GO for F3.1
-implementation planning** until ADR-009's nine must-decide product/governance items
-are resolved and the ADR is accepted. No application code, route, migration, Teams,
-CAB UI, pipeline enforcement, or real provider was introduced in F3.0.
+**Gate:** architecture is ready for stakeholder review through the active
+[F3 architect review brief](../architect-review-f3-change-authorization.md), but
+remains **NO-GO for F3.1 implementation planning** until ADR-009's nine must-decide
+product/governance items are resolved and the ADR is accepted. No application code,
+route, migration, Teams, CAB UI, pipeline enforcement, or real provider was
+introduced in F3.0.
 
 See [`implementation-progress.md`](./implementation-progress.md) §12–§18 for full checkpoint detail (F2.1, F2.1.1, F2.1.2, F2.1.3, F2.2, F2.2.1, F3.0 architecture).
 

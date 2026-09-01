@@ -1458,4 +1458,12 @@ from the ADO working tree could not authenticate because its `origin` is Azure
 DevOps; the canonical GitHub bridge was then located, fetched successfully, and
 verified at `692e697` before any documentation edit.
 
+### Architect handoff
+
+The architecture proposal was published in bridge commit `7c050a7`. The active
+[F3 architect review brief](../architect-review-f3-change-authorization.md) now
+summarizes the decision, invariants, nine mandatory product/governance decisions,
+deferred scope, and NO-GO gate. The older Teams-to-ADO identity brief is explicitly
+retained as historical POC evidence rather than an active implementation choice.
+
 ---

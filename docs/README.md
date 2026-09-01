@@ -49,6 +49,7 @@ Architect review
 | [`backstage/`](./backstage/) | IDP current state + implementation progress handoffs |
 | [`ui/`](./ui/) | Normative GMUD UI contracts and review screenshots |
 | [`architect-decision-teams-approval-identity.md`](./architect-decision-teams-approval-identity.md) | Teams Approval Gateway identity decision brief |
+| [`architect-review-f3-change-authorization.md`](./architect-review-f3-change-authorization.md) | Active F3.0 architect review packet and mandatory decisions |
 | [`future-gmud-context-enrichment.md`](./future-gmud-context-enrichment.md) | Future GMUD context on Teams approval cards |
 | [`hands-on-progress.md`](./hands-on-progress.md) | Approval Gateway POC execution log |
 

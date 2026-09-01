@@ -3,6 +3,7 @@
 - Status: Proposed — F3.0 architecture review required before F3.1 planning
 - Date: 2026-09-01
 - Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md), [ADR-006](./ADR-006-change-management-backend-contract.md), [ADR-007](./ADR-007-change-record-authority.md), [ADR-008](./ADR-008-multi-activity-change-execution-plan.md)
+- Review packet: [Architect review brief — F3 change authorization](../architect-review-f3-change-authorization.md)
 
 ## Context
 

@@ -1,5 +1,11 @@
 # Azure DevOps Approvals via Microsoft Teams — POC
 
+> **Architecture status (F3.0):** the implementation and POC history below remain
+> ADO-centric evidence, but they are not the proposed target authorization model.
+> Review [ADR-009](docs/adr/ADR-009-change-authorization-model.md) and the active
+> [F3 architect review brief](docs/architect-review-f3-change-authorization.md).
+> No F3.1 implementation or Teams integration is authorized yet.
+
 Hands-on proof of concept for approving Azure DevOps production deployments directly from Microsoft Teams while keeping Azure DevOps as the source of truth for approvers, approval state, authorization, audit, and environment protection.
 
 ## Target flow
@@ -44,7 +50,11 @@ Only an explicit production promotion should create the PRD approval flow.
 
 ## Current status
 
-The POC foundation and the ADO → Teams notification path are largely proven. **In-Teams Approve/Reject with correct ADO audit identity is blocked pending architect decision** — see [`docs/architect-decision-teams-approval-identity.md`](docs/architect-decision-teams-approval-identity.md).
+The POC foundation and the ADO → Teams notification path are largely proven. The
+historical in-Teams-to-ADO decision is preserved in
+[`docs/architect-decision-teams-approval-identity.md`](docs/architect-decision-teams-approval-identity.md),
+but the active decision is the provider-neutral authorization architecture in the
+[F3 architect review brief](docs/architect-review-f3-change-authorization.md).
 
 Completed:
 

@@ -1,6 +1,6 @@
 # Architect decision brief — Teams approval identity
 
-> Status: **awaiting architect decision**.
+> Status: **historical POC decision brief — no longer active; ADR-009 is the proposed target**.
 >
 > Date: 2026-08-26
 >
@@ -8,13 +8,21 @@
 >
 > Update 2026-08-26: an architecture spike was added at the end of this document. It evaluates whether the native Microsoft Azure Pipelines app for Teams removes the need for a custom approval path, and validates the delegated Teams SSO + On-Behalf-Of design. Read the spike before answering the decision below — it narrows Option B, changes what the gateway's approver matching is for, and establishes that **OBO is not required for the first proof**: a nominal Bot Framework OAuth connection reaches Azure DevOps with the user's own delegated token and no exchange code, which is what the next checkpoint (`AUTH-1`) uses.
 
+> **F3.0 update — 2026-09-01:** this document remains valid evidence about the
+> ADO-centric Approval Gateway POC, especially the incorrect audit identity caused
+> by service credentials. It is no longer the pending target-architecture decision.
+> [ADR-009](./adr/ADR-009-change-authorization-model.md) proposes that Teams submit
+> human decisions to the platform Change Management capability rather than patch an
+> Azure DevOps approval object. The current architect action is captured in
+> [Architect review brief — F3 change authorization](./architect-review-f3-change-authorization.md).
+
 ## Purpose
 
 Document the POC state after the first end-to-end approval attempt, the identity problem discovered when applying approvals from Teams, and the viable options so an architect can choose the next path.
 
 This document does **not** choose the production approach. It records facts and trade-offs.
 
-## Non-negotiable constraints (already agreed for the POC)
+## Non-negotiable constraints (historical ADO-centric POC)
 
 1. **Azure DevOps is the approval authority** — approvers, pending state, authorization, environment protection, and audit live in ADO.
 2. **Teams is UI only** — notification and interaction surface; not a second approval system.
@@ -183,7 +191,11 @@ From the engineering POC perspective:
 - If the near-term goal is only **reliable notification + correct authority**, keep **Option A** and stop claiming in-Teams approval until B lands.
 - Do **not** reintroduce per-approver PATs.
 
-## Decision requested
+## Historical decision requested (superseded)
+
+The A/B/C choice below is retained as POC history and must not be used to start a
+Teams-to-ADO implementation. The active architecture review is ADR-009 and the
+[F3 architect review brief](./architect-review-f3-change-authorization.md).
 
 Please choose one:
 
