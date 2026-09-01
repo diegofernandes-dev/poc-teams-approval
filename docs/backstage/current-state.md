@@ -167,7 +167,7 @@ See [`implementation-progress.md`](./implementation-progress.md) §14 for checkp
 | Bridge F2.1.1 handoff | `a65e1ed` · `44729aa` · `afaaaf6` (ADO SHA `ed6810b`) |
 | Bridge F2.1.2 handoff | `afb154b` · `75b4f38` (ADR-008; ADO SHA `5e4f30e`) |
 | Bridge F2.1.3 handoff | `f5f131f` (ADO SHA `75da44fb46d308e23b1c987e2093636fa4811b92`) |
-| **Bridge F2.2 handoff** | **`424e615`** (initial handoff, drafted before fetching `f5f131f`) · reconciliation merge on `main` |
+| **Bridge F2.2 handoff** | **`83a2b79`** (reconciliation merge, `main`) — first drafted as `424e615` before fetching `f5f131f` |
 
 ## Superseded references
 

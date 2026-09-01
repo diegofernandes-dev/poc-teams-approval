@@ -1095,7 +1095,7 @@ scope (F2.2)" and [ADR-007](../adr/ADR-007-change-record-authority.md) "Clarific
 | Repository | Branch | SHA |
 |---|---|---|
 | ADO `platform-devops-developer-portal` | `feat/ado-repo-governance` | `0b9cb38` |
-| Bridge `poc-teams-approval` | `main` | `424e615` (F2.2 handoff — this section) |
+| Bridge `poc-teams-approval` | `main` | `83a2b79` (reconciliation merge — this section) — first drafted as `424e615` before this checkpoint fetched upstream `f5f131f`; see "Deviations" below |
 
 ### Tests executed (ADO)
 
