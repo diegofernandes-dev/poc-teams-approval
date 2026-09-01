@@ -848,3 +848,51 @@ feat(gmud): F2.1.1 idempotency recovery and crash-safe retry semantics
 ### Bridge commit
 
 **`a65e1ed`** · **`44729aa`** · **`afaaaf6`** on branch `main` (ADO SHA `ed6810b`).
+
+---
+
+## 14. F2.1.2 — Multi-activity execution plan (architecture + backend)
+
+### Checkpoint summary
+
+F2.1.2 extends the canonical GMUD domain with **`ExecutionPlan`** / **`ExecutionActivity`** per [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md). A single GMUD may describe multiple planned execution activities with different responsible teams and optional activity-specific targets.
+
+**Backend only** — frontend wiring and Plano de execução UI remain deferred to F2.1.3.
+
+### Architecture decisions (ADR-008)
+
+| Topic | Decision |
+|---|---|
+| Cardinality | `executionPlan.activities` required, min 1, max 20 |
+| `Change.targetRef` | Retained as primary catalog anchor |
+| `ownerRef` vs `responsibleRef` | Owner = governance (server-derived); responsible = activity team (client Group) |
+| Activity `targetRef` | Optional Component |
+| Ordering | Array order authoritative; no `sequence` / `dependsOn` |
+| Window / rollback | Change-level only |
+| Activity status | **Rejected** — no workflow states |
+| Authorization | `responsibleRef` does **not** grant read access (F3) |
+| Index snapshot | Full immutable `executionPlan` with server `activityId`s |
+
+### ADO scope (F2.1.2)
+
+- Domain types on `Change` and `CreateChangeHttpRequest`
+- Zod validation + catalog validation for Group/Component refs
+- Server-assigned `activityId` (UUID) at create
+- `execution_plan_json` on `change_index` snapshot
+- Idempotency hash includes `executionPlan`
+- Provider passthrough (`DevelopmentProvider` JSON record)
+- Unit/integration tests
+- **STOP:** frontend, ITSM, activity status, search
+
+### Gate
+
+| Gate | Status |
+|---|---|
+| F2.1.2 architecture | **Accepted** — ADR-008 |
+| F2.1.2 backend | **In progress** — see ADO commit below |
+| Frontend wiring | **STOP** until F2.1.3 |
+| SharePoint/Jira/ServiceNow | **STOP** |
+
+### Bridge commit
+
+Recorded after ADO F2.1.2 handoff (ADR-008 + doc updates on `main`).

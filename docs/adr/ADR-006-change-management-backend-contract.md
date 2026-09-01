@@ -2,7 +2,7 @@
 
 - Status: Accepted (F2.0 architecture)
 - Date: 2026-08-30
-- Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md), [ADR-007](./ADR-007-change-record-authority.md)
+- Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md), [ADR-007](./ADR-007-change-record-authority.md), [ADR-008](./ADR-008-multi-activity-change-execution-plan.md)
 
 ## Context
 
@@ -80,6 +80,7 @@ Transport DTOs must not be blindly copied from frontend types. The backend contr
 | `risk` | User form |
 | `rollbackPlan` | User form |
 | `evidence` | User form (F2.0 accepts `[]` only) |
+| `executionPlan` | User form — see [ADR-008](./ADR-008-multi-activity-change-execution-plan.md) |
 
 **Derived server-side (not trusted from client):**
 
@@ -92,6 +93,7 @@ Transport DTOs must not be blindly copied from frontend types. The backend contr
 | `status` | Always `submitted` on create (no draft persistence) |
 | `createdAt` | Server clock (UTC ISO 8601) |
 | `requestedWindow.startsAtUtc` / `endsAtUtc` | Normalized from form + configured timezone |
+| `executionPlan.activities[].activityId` | Server-assigned UUID at create (not in POST body) |
 
 **Rejected from canonical public model (must never appear):**
 
@@ -254,6 +256,11 @@ Independent from frontend validation. Minimum invariants:
 - `risk` ∈ `{ low, medium, high }`
 - `rollbackPlan` min 10 chars trimmed
 - `evidence`: array; F2.0 accepts empty array only
+- `executionPlan.activities`: array min 1, max 20 (F2.1.2 — [ADR-008](./ADR-008-multi-activity-change-execution-plan.md))
+  - `title` trimmed, 3–200 chars
+  - `description` trimmed, 10–2000 chars
+  - `responsibleRef`: valid Catalog `Group` entity ref
+  - `targetRef` optional: valid Catalog `Component` entity ref when present
 
 ### Timezone semantics
 
@@ -356,7 +363,7 @@ Correlation via `changeId` and Backstage request logger.
 | # | Question | Answer |
 |---|---|---|
 | 1 | Trusted create contract | `CreateChangeHttpRequest` — user-editable fields only |
-| 2 | Frontend fields | targetRef, classification, title, summary, requestedWindow, risk, rollbackPlan, evidence |
+| 2 | Frontend fields | targetRef, classification, title, summary, requestedWindow, risk, rollbackPlan, evidence, executionPlan |
 | 3 | Server-derived fields | requestedBy, ownerRef, systemRef, changeId, status, timestamps, UTC window |
 | 4 | Who generates changeId | ChangeManagementService (before provider write) |
 | 5 | Minimal ChangeStatus | `submitted` only |

@@ -4,7 +4,7 @@
 > **Canonical architectural branch:** `main` (branch `docs/architecture-decisions-mvp` superseded as of F1.4)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal`  
 > **Active branch:** `feat/ado-repo-governance`  
-> **Last updated:** 2026-08-31 (F2.1.1 idempotency recovery checkpoint)
+> **Last updated:** 2026-09-01 (F2.1.2 multi-activity execution plan checkpoint)
 
 ## Stack
 
@@ -25,8 +25,8 @@
 | Route | `/gmud` |
 | Plugin | `@internal/plugin-change-management` |
 | API (client) | `ChangeManagementApi` + `MockChangeManagementApi` (still mock — **not wired to backend**) |
-| Domain model (frontend) | `CreateChangeRequest` — `targetRef`, `classification`, `requestedWindow`, `risk`, `rollbackPlan`, `evidence` |
-| UI | Four numbered form sections + informational right rail (Fluxo da Mudança) |
+| Domain model (frontend) | `CreateChangeRequest` — `targetRef`, `classification`, `requestedWindow`, `risk`, `rollbackPlan`, `evidence` — **`executionPlan` normative per ADR-008; UI not implemented** |
+| UI | Four numbered form sections + informational right rail (Fluxo da Mudança) — **five sections when F2.1.3 UI lands** |
 
 ### Backend (F2.1 — durable Model C persistence)
 
@@ -45,6 +45,7 @@
 | RBAC | `change-management.change.create` / `.read` (unchanged) |
 | Canonical backend contract | [ADR-006](../adr/ADR-006-change-management-backend-contract.md) |
 | Record authority | [ADR-007](../adr/ADR-007-change-record-authority.md) — Model C |
+| Execution plan domain | [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md) — F2.1.2 |
 
 #### Backend capabilities (F2.1 + F2.1.1)
 
@@ -56,6 +57,7 @@
 - `DevelopmentProvider` operational records in `development_change_records` (logically isolated)
 - Fail-closed provider errors (503); unfinalized index rows not visible on GET
 - Degraded read: **503** when provider unavailable (snapshot exists but not returned — explicit degraded response deferred)
+- **F2.1.2:** `executionPlan` / `ExecutionActivity` on canonical `Change`; index snapshot includes full plan; catalog-validated `responsibleRef` (Group) and optional activity `targetRef`
 
 #### Explicitly not implemented (F2.1)
 
@@ -78,7 +80,7 @@
 ### Normative references
 
 - UI contract: [`gmud-create-screen.md`](../ui/gmud-create-screen.md) (F1.4 — frontend unchanged)
-- Architecture decisions: [`docs/adr/`](../adr/README.md) (ADR-001 through ADR-007 on `main`)
+- Architecture decisions: [`docs/adr/`](../adr/README.md) (ADR-001 through ADR-008 on `main`)
 - Backend contract: [ADR-006](../adr/ADR-006-change-management-backend-contract.md)
 - Record authority: [ADR-007](../adr/ADR-007-change-record-authority.md)
 - Handoff detail: [`implementation-progress.md`](./implementation-progress.md) §9–§10
@@ -88,13 +90,15 @@
 - F1.2 before baseline: [`gmud-create-f1.2-after.png`](../ui/screenshots/gmud-create-f1.2-after.png)
 - F1.3+ after capture: manual — see [`screenshots/README.md`](../ui/screenshots/README.md)
 
-## Review gate — F2.1.1 idempotency recovery checkpoint (awaiting architecture review)
+## Review gate — F2.1.2 multi-activity execution plan checkpoint
 
-F2.1.1 closes crash/retry reliability gaps before frontend wiring. Frontend remains mock-backed.
+F2.1.2 extends the canonical domain with `ExecutionPlan` / `ExecutionActivity` (backend only). Frontend remains mock-backed.
 
-**STOP** before SharePoint/Jira/ServiceNow. **STOP** frontend wiring until F2.1.1 review completes.
+**STOP** before frontend wiring, ITSM providers, activity status, and search.
 
-See [`implementation-progress.md`](./implementation-progress.md) §13 for checkpoint detail, tests, and deviations.
+See [`implementation-progress.md`](./implementation-progress.md) §14 for checkpoint detail.
+
+## Review gate — F2.1.1 idempotency recovery checkpoint (passed)
 
 ## Review gate — F2.1 backend checkpoint (passed — superseded by F2.1.1 gate)
 
