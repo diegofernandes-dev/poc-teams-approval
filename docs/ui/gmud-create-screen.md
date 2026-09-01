@@ -210,6 +210,20 @@ No secondary draft action in F1.4 — draft persistence requires a real backend 
 
 No `Approve` action on this screen.
 
+## Post-create navigation (F2.2)
+
+After a successful `POST /changes`, the main column swaps to a success card (no
+route change, no navigation away from `/gmud/new`) offering:
+
+| Action | Behavior |
+|---|---|
+| **Ver GMUD** (primary) | Navigates to `/gmud/:changeId` — the new [detail screen](./gmud-detail-screen.md), resolved via `useRouteRef(changeDetailRouteRef)` |
+| **Criar outra GMUD** | Resets the form in place (unchanged from F1.4) |
+| **Voltar para Minhas GMUDs** | Navigates to `/gmud` — the [My Changes list](./gmud-my-changes-screen.md) |
+
+The user is never required to remember or copy the `changeId` to find the GMUD
+again. See `implementation-progress.md` §13 for the backend/frontend wiring.
+
 ## Canonical frontend model
 
 ```typescript

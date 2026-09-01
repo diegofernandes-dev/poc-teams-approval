@@ -2,10 +2,10 @@
 
 > **Bridge repository:** `diegofernandes-dev/poc-teams-approval` — architectural handoff (this document)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal` — authoritative source code  
-> **Checkpoint:** F2.0 — Change Management backend contract & architecture (complete) · F1.4 prior  
-> **Prior checkpoints:** F1 (frontend shell) · F1.1 (visual polish) · F1.2 (Backstage-first composition) · F1.3 (semantic UX) · F1.4 (integrity cleanup)  
-> **UI reference:** [`gmud-create-screen.md`](../ui/gmud-create-screen.md) · Backend contract: [ADR-006](../adr/ADR-006-change-management-backend-contract.md)  
-> **Status:** F2.0 complete — **STOP** before F2.1 (architecture review gate)
+> **Checkpoint:** F2.2 — My Changes List + Change Detail (complete) · F2.1–F2.1.3 prior  
+> **Prior checkpoints:** F1 (frontend shell) · F1.1 (visual polish) · F1.2 (Backstage-first composition) · F1.3 (semantic UX) · F1.4 (integrity cleanup) · F2.0 (backend contract & architecture) · F2.1–F2.1.3 (durable index, DevelopmentProvider, idempotency recovery, execution plan domain — see §12 backfill)  
+> **UI reference:** [`gmud-create-screen.md`](../ui/gmud-create-screen.md) · [`gmud-my-changes-screen.md`](../ui/gmud-my-changes-screen.md) · [`gmud-detail-screen.md`](../ui/gmud-detail-screen.md) · Backend contract: [ADR-006](../adr/ADR-006-change-management-backend-contract.md)  
+> **Status:** F2.2 complete — **STOP** before F3 (approvals, workflow, real ITSM providers, Teams, CAB, ADO correlation, evidence upload, editing)
 >
 > **Note:** ADO file paths in section 3 are **implementation references** in the Azure DevOps repository, not paths in this bridge repo.
 
@@ -653,3 +653,207 @@ Per ADR-007 conditional GO:
 3. Durable idempotency + `changeId` sequence
 4. Wire frontend to backend (separate checkpoint — stop for review after backend persistence)
 5. **STOP** before SharePoint/Jira/ServiceNow
+
+---
+
+## 12. GMUD F2.1 → F2.1.3 — baseline backfill (undocumented ADO commits)
+
+**Checkpoint:** Documentation debt resolution, not a new implementation slice. §11
+above accepted ADR-007 and authorized F2.1 ADO coding on **2026-08-31**. Four ADO
+commits then landed on `feat/ado-repo-governance` — `0dc3ed4`, `ed6810b`, `5e4f30e`,
+`75da44f` — without a corresponding bridge handoff. This section is a **condensed
+backfill**, reconstructed from the ADO source at the F2.2 checkpoint, not a
+contemporaneous per-commit handoff. Treat commit-level detail as approximate; the
+architecture-level claims are verified against the code as of `75da44f`.
+
+### Commits covered
+
+| SHA | Message | Summary (reconstructed) |
+|---|---|---|
+| `0dc3ed4` | `feat(gmud): F2.1 durable canonical index and DevelopmentProvider` | Implements ADR-007 Model C: `change_index` + `development_change_records` tables (knex migration `20260831120000_initial.cjs`), `KnexChangeIndexRepository`, `KnexIdempotencyRepository`, `DatabaseChangeIdGenerator`, `DevelopmentProvider`, `ProviderRegistry`. GET now routes via `indexRecord.providerKey`, not a direct fake-provider call. |
+| `ed6810b` | `feat(gmud): F2.1.1 idempotency recovery and crash-safe retry semantics` | Two-phase create (`insertPending` → provider write → `finalize`, transactional for `DevelopmentProvider`) with crash-recovery paths (`ChangeManagementService.recovery.test.ts`): resumes a reserved-but-uncompleted idempotency record without re-consuming the `changeId` sequence, and logs `change.create.orphan` when an index row exists without a completed idempotency record. |
+| `5e4f30e` | `feat(gmud): F2.1.2 multi-activity execution plan domain` | Adds `ExecutionActivity`/`ExecutionPlan` to the canonical `Change` and `CreateChangeHttpRequest` (required, 1–20 activities), `executionPlanValidator.ts` (`responsibleRef` must resolve as a Catalog `Group`, optional `targetRef` as a `Component`), and migration `20260901120000_add_execution_plan_to_change_index.cjs`. The commit message cites "per ADR-008" — **no ADR-008 exists in this repository**; see "Unresolved questions" below. |
+| `75da44f` | `feat(gmud): wire execution plan to real backend` | Connects the F1.4 create form to the real `POST /changes` endpoint (discovery + fetch, `Idempotency-Key` header, idempotency-key lifecycle on the client), including the multi-activity plan UI (`GmudForm.tsx` add/remove activities). This is the "separate checkpoint — stop for review after backend persistence" §11 flagged; it proceeded without that review gate being exercised in the bridge. |
+
+### Architecture conformance (verified against ADO at `75da44f`)
+
+| ADR-007 requirement | Verified state |
+|---|---|
+| `IChangeManagementProvider` retained, not replaced by a monolithic repository | Yes — `DevelopmentProvider implements IChangeManagementProvider`; `ChangeManagementService` still calls `providerRegistry.resolve(providerKey)` on read |
+| Immutable `providerKey` recorded in the index | Yes — `change_index.provider_key`, written once at `insertPending`, never rewritten |
+| GET routes index → provider, not index-only | Yes — `findFinalizedByChangeId` then `provider.get(changeId)`; index snapshot is not returned as the public response |
+| No public workflow statuses introduced | Yes — `ChangeStatus = 'submitted'` only |
+| Canonical index minimum fields present | Yes, plus `execution_plan_json` (§ ADR-008 gap below) |
+
+### Deviations from ADR-006/ADR-007 at time of backfill
+
+| Topic | ADR-006/007 (pre-F2.1) | ADO `75da44f` | Resolution |
+|---|---|---|---|
+| Execution plan domain | Not modeled — single-change fields only | `ExecutionActivity[]`/`ExecutionPlan` added to `Change` and the create contract | Documented here; no ADR-008 was written. Treated as an accepted architecture extension, not a drift, since it follows the same provider-neutral, no-workflow-status constraints as the rest of the domain — but the gap should be closed with a real ADR before further execution-plan semantics (ordering, per-activity status) are added |
+| Frontend wiring timing | §11 flagged wiring as a "separate checkpoint — stop for review" | Wiring landed in the same commit range as F2.1.1/F2.1.2, without an intervening bridge review | Reported here as a process deviation; no architectural harm found — the wired contract matches ADR-006 §"Trusted create request contract" field-for-field |
+
+### Unresolved questions
+
+1. **ADR-008 does not exist.** Commit `5e4f30e` cites "per ADR-008" for the execution
+   plan domain; this repository's ADR set stops at ADR-007. Writing ADR-008 is
+   explicitly **not** part of this backfill or of F2.2 — it requires product
+   decisions (activity ordering/dependency semantics, per-activity status,
+   min/max counts, idempotency payload-hash coverage) that are out of scope for a
+   documentation catch-up. Flagged for a future architecture slice.
+2. Per-commit bridge handoffs were skipped for F2.1–F2.1.3; this backfill restores
+   the paper trail but cannot recover intermediate design rationale that was never
+   written down.
+
+### Next recommended slice
+
+F2.2 — My Changes List + Change Detail (§13 below). No further F2.1.x backfill
+needed; §13 picks up from `75da44f`.
+
+---
+
+## 13. GMUD F2.2 — My Changes List + Change Detail
+
+**Checkpoint:** F2.2 — read UX closing create → discover → open → read. **STOP** —
+do not begin F3 (approvals, workflow, real ITSM providers, Teams, CAB, ADO
+correlation, evidence upload, editing, activity lifecycle).
+
+### Objective
+
+Make a created GMUD discoverable and readable: a "Minhas GMUDs" list backed by the
+platform canonical index, a read-only detail page reachable from that list and from
+the post-create success screen, and the smallest backend surface (`GET /changes`)
+needed to serve the list without ever calling `IChangeManagementProvider`.
+
+### Architecture decisions (summary)
+
+| Decision | Choice |
+|---|---|
+| List data source | Platform canonical index (`change_index`, `is_finalized = true` only) — never the provider |
+| Detail data source | Unchanged — `indexRecord.providerKey` → `IChangeManagementProvider.get()` |
+| List authorization | Re-runs the exact `canReadChange(snapshot, actor)` predicate GET uses — not a parallel rule |
+| `ExecutionActivity.responsibleRef` | Grants no read access on list or detail (unchanged policy) |
+| List projection | New `ChangeSummary` type — no `providerKey`/`externalId`/`externalUrl`, `activityCount` instead of the full execution plan |
+| Repository surface | `ChangeIndexRepository.listReadable(filter)`, `filter: { scope: 'all' } \| { scope: 'actor'; requestedBy; ownerRefs }` — not a generic `ChangeRepository.list()` |
+| Pagination | Fixed `limit = 50`, `ORDER BY created_at DESC` — no query language, no filters |
+| Frontend routing | Single `page:change-management` extension at `/gmud`; nested `<Routes>` (`GmudRouter`) for `/gmud` (list), `/gmud/new` (create, moved from `/gmud`), `/gmud/:changeId` (detail) via `createSubRouteRef` |
+| Provider-failure UX | List stays available (index-backed); detail shows a human-safe 503 message and never renders stale snapshot data as if it were current |
+| Display names | Catalog resolution is best-effort; failure/loading falls back to the raw entity ref permanently — never blocks rendering |
+
+See [ADR-006](../adr/ADR-006-change-management-backend-contract.md) "List read
+scope (F2.2)" and [ADR-007](../adr/ADR-007-change-record-authority.md) "Clarification
+— discovery/listing vs. detail authority" for the full contract.
+
+### Bridge files changed
+
+| Path | Change |
+|---|---|
+| `docs/adr/ADR-006-change-management-backend-contract.md` | `GET /changes` added to HTTP contract; new "List read scope (F2.2)" subsection; F2.2 addendum |
+| `docs/adr/ADR-007-change-record-authority.md` | New "Clarification — discovery/listing vs. detail authority (F2.2)" section |
+| `docs/backstage/current-state.md` | F2.2 snapshot — list/detail delivered, F2.1–F2.1.3 backfilled |
+| `docs/backstage/implementation-progress.md` | §12 (F2.1–F2.1.3 backfill) and this section |
+| `docs/ui/gmud-my-changes-screen.md` | New — normative UI contract for the list page |
+| `docs/ui/gmud-detail-screen.md` | New — normative UI contract for the detail page |
+| `docs/ui/gmud-create-screen.md` | Post-create navigation section added (Ver GMUD / Criar outra GMUD / Voltar para Minhas GMUDs) |
+
+### ADO files changed
+
+| Path | Purpose |
+|---|---|
+| `packages/backend/src/modules/changeManagement/types.ts` | `ChangeSummary` projection type |
+| `packages/backend/src/modules/changeManagement/persistence/types.ts` | `ChangeIndexListFilter` |
+| `packages/backend/src/modules/changeManagement/persistence/ChangeIndexRepository.ts` | `listReadable(filter)` added to the interface |
+| `packages/backend/src/modules/changeManagement/persistence/KnexChangeIndexRepository.ts` | `listReadable` — `is_finalized = true`, actor OR owner-group predicate, `ORDER BY created_at DESC LIMIT 50` |
+| `packages/backend/src/modules/changeManagement/testHelpers.ts` | `FaultInjectingChangeIndexRepository.listReadable` passthrough |
+| `packages/backend/src/modules/changeManagement/ChangeManagementService.ts` | `listChanges(actor)` — scope resolution, `canReadChange` re-filter, `toChangeSummary` mapping; zero provider calls |
+| `packages/backend/src/modules/changeManagement/ChangeManagementService.list.test.ts` | New — list authorization, content, architecture (no provider calls), provider-failure coverage |
+| `packages/backend/src/plugins/changeManagementPlugin.ts` | `GET /changes` route, mounted before `GET /changes/:changeId` |
+| `plugins/change-management/src/routes.ts` | `createChangeRouteRef` (`/new`), `changeDetailRouteRef` (`/:changeId`) via `createSubRouteRef` |
+| `plugins/change-management/src/alpha.tsx` | Page loader now resolves `GmudRouter` instead of `GmudCreatePage` directly |
+| `plugins/change-management/src/components/GmudRouter/GmudRouter.tsx` | New — nested route table for the GMUD area |
+| `plugins/change-management/src/components/GmudListPage/GmudListPage.tsx` | New — Minhas GMUDs (`@backstage/core-components` `Table`, `EmptyState`) |
+| `plugins/change-management/src/components/GmudDetailPage/GmudDetailPage.tsx` | New — read-only canonical detail + ordered execution plan |
+| `plugins/change-management/src/utils/useEntityDisplayNames.ts` | New — best-effort Catalog ref → display-name resolution, ref fallback |
+| `plugins/change-management/src/utils/formatChangeWindow.ts` | Previously untracked/unused — now consumed by list and detail |
+| `plugins/change-management/src/utils/mapChangeManagementError.ts` | New `mapChangeReadErrorToMessage` (read-flavored copy, separate from the create-flavored mapping) |
+| `plugins/change-management/src/api/ChangeManagementApi.ts` / `ChangeManagementClient.ts` / `MockChangeManagementApi.ts` | `listChanges()`, `getChange(changeId)` added to the client contract |
+| `plugins/change-management/src/components/GmudCreatePage/GmudCreatedSummary.tsx` | Post-create actions: Ver GMUD, Voltar para Minhas GMUDs, Criar outra GMUD |
+| `plugins/change-management/src/index.ts` | Exports `Change`, `ChangeSummary`, the two new sub-route refs |
+| `*.test.ts(x)` (list/detail/router pages, client, create-page mocks) | New/updated coverage — see "Tests executed" below |
+
+### Commits
+
+| Repository | Branch | SHA |
+|---|---|---|
+| ADO `platform-devops-developer-portal` | `feat/ado-repo-governance` | `0b9cb38` |
+| Bridge `poc-teams-approval` | `main` | _recorded in the following commit on this branch_ |
+
+### Tests executed (ADO)
+
+```bash
+yarn workspace backend test --watchAll=false --testPathPatterns=changeManagement
+# PASS 9 suites / 56 tests (11 new in ChangeManagementService.list.test.ts)
+
+yarn workspace @internal/plugin-change-management test --watchAll=false
+# PASS 13 suites / 58 tests
+
+yarn workspace backend lint                     # PASS
+yarn workspace @internal/plugin-change-management lint   # PASS
+yarn tsc
+# 5 pre-existing errors in changeManagementPlugin.ts (dual-knex-package type
+# mismatch between @backstage/backend-plugin-api's bundled knex and the
+# workspace knex; present before this checkpoint, on unmodified lines,
+# verified via `git stash` against the same file) — zero new errors from F2.2
+```
+
+### Persistence verification (checkpoint §18 of the brief)
+
+A temporary, non-committed manual test built the real `ChangeManagementService` +
+`DevelopmentProvider` + `KnexChangeIndexRepository` against a **file-backed**
+better-sqlite3 database (not `:memory:`) and ran the unmodified production
+`createChange` path. Verified — via both the Jest assertions and an independent
+`sqlite3` CLI query against the resulting file, outside Node/Knex entirely:
+
+```text
+change_id       | provider_key | is_finalized | status    | requested_by       | owner_ref
+CHG-2026-000001 | development  | 1            | submitted | user:default/alice | group:default/cloud_azure_devops_payments
+
+change_id       | record_json_bytes
+CHG-2026-000001 | 845
+```
+
+Confirms `CHG-2026-000001` exists in **both** `change_index` (finalized, correct
+`provider_key`) and `development_change_records` (full canonical `Change` as
+`record_json`), and that `listChanges` surfaces it as a `ChangeSummary`. No debug
+SQL paths were added to production code; the verification script was deleted after
+the run.
+
+### Deviations
+
+None between the ADO implementation and this checkpoint's scope at time of handoff.
+Carried forward from §12: **ADR-008 still does not exist** — this remains an open
+documentation gap, not introduced or resolved by F2.2.
+
+### Unresolved questions
+
+1. Same as ADR-006 §"List read scope (F2.2)": team-wide/enterprise-wide search
+   across other actors' changes is deferred to F3 — not attempted here.
+2. `created_at` has no dedicated index; acceptable at dev scale, called out as a
+   future concern if `change_index` grows large.
+3. ADR-008 (multi-activity execution plan) remains unwritten — see §12.
+
+### Next recommended slice (F3)
+
+Per the brief's explicit STOP condition — do **not** begin without a separate
+architecture review:
+
+1. Approvals / workflow / activity lifecycle statuses
+2. Real ITSM providers (SharePoint, Jira, ServiceNow)
+3. Teams, CAB scheduling
+4. Azure DevOps / pipeline / deployment correlation
+5. Evidence upload, editing, deletion
+6. Team-wide / enterprise listing and search
+7. **STOP** before any of the above without review
+
+**F2.2 handoff complete.** Wait for architecture review before F3.
+
+---

@@ -218,6 +218,39 @@ ADR-006 previously stated idempotency and sequence lived in `FakeChangeManagemen
 - Trade-off: Old provider outage may degrade historical detail to platform snapshot
 - Trade-off: F2.1 requires ADO code changes beyond F2.0 scaffold
 
+## Clarification — discovery/listing vs. detail authority (F2.2, 2026-09-01)
+
+This ADR fixed identity, routing, and audit-snapshot ownership for the platform
+canonical index. It did not originally say whether that index could power a list
+endpoint. F2.2 answers this narrowly, without reopening the Model C decision above:
+
+**The canonical index may serve discovery/listing from its creation-time snapshot;
+the provider remains the detail/operational record authority.**
+
+Concretely:
+
+| Surface | Source | Authority |
+|---|---|---|
+| **List** (`GET /changes`) | Platform canonical index (`change_index`), creation-time snapshot | Discovery only — never claims to be live provider/workflow state |
+| **Detail** (`GET /changes/:changeId`) | `indexRecord.providerKey` → `IChangeManagementProvider.get()` | Provider-authoritative canonical `Change`, per Model C above |
+
+This is not a new authority — it is the same "audit snapshot… degraded read when
+provider unavailable" purpose the index already had (see "Platform canonical index
+(minimum durable fields)" above), now also serving routine discovery instead of only
+a fallback path. It does **not** change:
+
+- who owns the operational record (still the provider, per Model C);
+- the anti-pattern above (a list backed by the index is not a `ChangeRepository`
+  replacing the provider — detail still routes through `IChangeManagementProvider`);
+- catalog snapshot semantics (list rows carry the same creation-time `ownerRef` as
+  detail, never a live re-resolution).
+
+A provider outage therefore degrades **detail only**: `GET /changes` keeps working
+(it never touches `IChangeManagementProvider`), while `GET /changes/:changeId` for
+an affected record returns `503 PROVIDER_UNAVAILABLE`. This is expected, not a bug —
+see ADR-006's "List read scope (F2.2)" for the read-authorization predicate, which is
+identical between list and detail.
+
 ## Related documents
 
 - Backend contract: [ADR-006](./ADR-006-change-management-backend-contract.md)

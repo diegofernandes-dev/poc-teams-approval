@@ -183,6 +183,7 @@ F2.0 reads directly from the fake provider without an index layer.
 | Method | Path | Permission |
 |---|---|---|
 | `POST` | `/api/change-management/changes` | `change-management.change.create` |
+| `GET` | `/api/change-management/changes` | `change-management.change.read` |
 | `GET` | `/api/change-management/changes/:changeId` | `change-management.change.read` |
 
 **POST headers:** optional `Idempotency-Key` (recommended; persistent handling in F2.1).
@@ -192,6 +193,7 @@ F2.0 reads directly from the fake provider without an index layer.
 | Status | Code | When |
 |---|---|---|
 | 201 | — | Create succeeded `{ changeId, status: "submitted" }` |
+| 200 | — | LIST succeeded `{ changes: ChangeSummary[] }` (F2.2 — see "List read scope" below) |
 | 200 | — | GET succeeded `{ change: Change }` |
 | 400 | `VALIDATION_ERROR` | Invalid input |
 | 401 | `UNAUTHORIZED` | Missing credentials |
@@ -240,7 +242,22 @@ Enforced in routes via `coreServices.permissions.authorize()`.
 - `platform_admin` → any change
 - Otherwise → `change.requestedBy === actor.userEntityRef` **OR** actor `ownershipEntityRefs` includes `change.ownerRef`
 
-Team-wide / all-changes listing scope is deferred to F3.
+### List read scope (F2.2)
+
+`GET /changes` uses the **identical predicate** as `GET /changes/:changeId` above — not a
+separately maintained rule. The service re-runs `canReadChange(snapshot, actor)` against
+every row the index query returns, so a change a user cannot open by `changeId` can never
+appear in their list either.
+
+`ExecutionActivity.responsibleRef` grants **no** read access, on list or on detail — an
+actor who is only a member of an activity's responsible team, and neither the requester
+nor the change owner, sees nothing. That remains a future policy decision, not implemented
+here.
+
+This supersedes the F2.0 line above only for **the requester's own actor-scoped list**
+(own + owned changes, `platform_admin` sees all). **Team-wide / enterprise-wide search
+across other actors' changes remains deferred to F3** — F2.2 does not introduce a query
+language, filters, or cross-team discovery.
 
 ### Validation (backend)
 
@@ -388,3 +405,24 @@ Per [ADR-007](./ADR-007-change-record-authority.md) — **conditional GO** after
 6. Wire frontend `ChangeManagementApi` to backend via discovery + fetch
 7. Remove `requestedBy` / `ownerRef` / `systemRef` from frontend POST payload
 8. **STOP** before SharePoint/Jira/ServiceNow
+
+## Addendum — F2.2 discovery/listing contract (2026-09-01)
+
+F2.1–F2.1.3 delivered items 1–7 above (durable index, `DevelopmentProvider`,
+persisted `ProviderReference`/GET-via-index routing, durable idempotency, frontend
+wiring, trusted-field removal, and a multi-activity execution plan domain per an
+ADO-only decision referred to as "ADR-008" — no such ADR was ever written in this
+repository; see `implementation-progress.md` for the backfill and this gap).
+
+F2.2 adds the smallest useful discovery surface on top of that baseline: `GET
+/changes`, backed by the platform canonical index described in
+[ADR-007](./ADR-007-change-record-authority.md), never by `IChangeManagementProvider`.
+The HTTP contract table and "List read scope" subsection above are already updated
+in place to reflect this — this addendum exists only to record *when* and *why* the
+contract grew a third endpoint, per this repository's practice of amending ADR-006
+in place rather than forking a parallel document for every contract change.
+
+**Explicitly still true:** `ChangeSummary` (the list projection) is not the public
+`Change` — no `providerKey`, `externalId`, or `externalUrl`, and no live provider
+read backs it. See ADR-007's discovery/detail clarification for the authority
+boundary.
