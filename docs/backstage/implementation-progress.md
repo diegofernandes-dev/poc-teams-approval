@@ -847,4 +847,4 @@ feat(gmud): F2.1.1 idempotency recovery and crash-safe retry semantics
 
 ### Bridge commit
 
-**`a65e1ed`** · **`44729aa`** on branch `main` (ADO SHA `ed6810b` recorded in this update).
+**`a65e1ed`** · **`44729aa`** · **`afaaaf6`** on branch `main` (ADO SHA `ed6810b`).
