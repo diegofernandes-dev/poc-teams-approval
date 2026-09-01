@@ -2,7 +2,7 @@
 
 - Status: Accepted (F2.0 architecture)
 - Date: 2026-08-30
-- Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md), [ADR-007](./ADR-007-change-record-authority.md)
+- Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md), [ADR-007](./ADR-007-change-record-authority.md), [ADR-008](./ADR-008-multi-activity-change-execution-plan.md)
 
 ## Context
 
@@ -80,6 +80,7 @@ Transport DTOs must not be blindly copied from frontend types. The backend contr
 | `risk` | User form |
 | `rollbackPlan` | User form |
 | `evidence` | User form (F2.0 accepts `[]` only) |
+| `executionPlan` | User form — see [ADR-008](./ADR-008-multi-activity-change-execution-plan.md) |
 
 **Derived server-side (not trusted from client):**
 
@@ -92,6 +93,7 @@ Transport DTOs must not be blindly copied from frontend types. The backend contr
 | `status` | Always `submitted` on create (no draft persistence) |
 | `createdAt` | Server clock (UTC ISO 8601) |
 | `requestedWindow.startsAtUtc` / `endsAtUtc` | Normalized from form + configured timezone |
+| `executionPlan.activities[].activityId` | Server-assigned UUID at create (not in POST body) |
 
 **Rejected from canonical public model (must never appear):**
 
@@ -271,6 +273,11 @@ Independent from frontend validation. Minimum invariants:
 - `risk` ∈ `{ low, medium, high }`
 - `rollbackPlan` min 10 chars trimmed
 - `evidence`: array; F2.0 accepts empty array only
+- `executionPlan.activities`: array min 1, max 20 (F2.1.2 — [ADR-008](./ADR-008-multi-activity-change-execution-plan.md))
+  - `title` trimmed, 3–200 chars
+  - `description` trimmed, 10–2000 chars
+  - `responsibleRef`: valid Catalog `Group` entity ref
+  - `targetRef` optional: valid Catalog `Component` entity ref when present
 
 ### Timezone semantics
 
@@ -283,8 +290,12 @@ Independent from frontend validation. Minimum invariants:
 
 Duplicate POST handling via optional `Idempotency-Key` header:
 
-- Same key + same payload hash → return existing `{ changeId, status }`
-- Same key + different payload → `409 CONFLICT`
+- The persisted identity is `(operation, requested_by, idempotency_key)`, where
+  `requested_by` is the authenticated actor resolved by the backend. Actor identity
+  supplied by the frontend is never trusted.
+- Same authenticated actor + same key + same payload hash → return existing `{ changeId, status }`
+- Same authenticated actor + same key + different payload → `409 CONFLICT`
+- Different authenticated actors + the same key → independent idempotency namespaces
 - No key → each POST creates a new change (acceptable in dev; key recommended before production)
 
 Idempotency is **service-owned** via `IdempotencyStore` (`idempotency.ts`) — separate from the provider. F2.0 uses an in-memory store; F2.1 uses durable platform storage with a unique key constraint.
@@ -298,6 +309,17 @@ validate → authorize → enrich → idempotency check/reserve
 ```
 
 On provider failure: fail-closed 503; no public `changeId`. Idempotency retry after provider failure must not allocate a new `changeId` for the same key+payload once a prior attempt succeeded.
+
+**F2.1.1 recovery semantics (normative clarification):**
+
+- Durable idempotency states: `pending` | `completed` only (internal request-processing; not public GMUD workflow status).
+- Same key + same payload while `pending`: synchronously **resume** the original operation using the stored `changeId` — never allocate a second sequence number.
+- Same key + different payload: **409 CONFLICT** regardless of `pending` or `completed`.
+- Index-as-recovery-evidence: if `change_index.is_finalized` but idempotency is `pending`, heal idempotency to `completed` and return the cached result without a second provider call.
+- Orphan (`change.create.orphan`): provider create succeeded but platform finalize failed — retry with same key must reconcile via idempotent `provider.create(changeId)` + finalize; log includes `idempotencyKey` when present.
+- Provider contract: `IChangeManagementProvider.create` must be idempotent by canonical platform `changeId` (second call returns existing `ProviderReference`, not a duplicate operational record).
+- Recovery incomplete during retry: **503** `PROVIDER_UNAVAILABLE` — never return 201 until index + idempotency are consistent.
+- No background reconciliation worker in F2.1.1 — retry-driven reconciliation only.
 
 ### Failure semantics
 
@@ -362,7 +384,7 @@ Correlation via `changeId` and Backstage request logger.
 | # | Question | Answer |
 |---|---|---|
 | 1 | Trusted create contract | `CreateChangeHttpRequest` — user-editable fields only |
-| 2 | Frontend fields | targetRef, classification, title, summary, requestedWindow, risk, rollbackPlan, evidence |
+| 2 | Frontend fields | targetRef, classification, title, summary, requestedWindow, risk, rollbackPlan, evidence, executionPlan |
 | 3 | Server-derived fields | requestedBy, ownerRef, systemRef, changeId, status, timestamps, UTC window |
 | 4 | Who generates changeId | ChangeManagementService (before provider write) |
 | 5 | Minimal ChangeStatus | `submitted` only |
@@ -410,9 +432,9 @@ Per [ADR-007](./ADR-007-change-record-authority.md) — **conditional GO** after
 
 F2.1–F2.1.3 delivered items 1–7 above (durable index, `DevelopmentProvider`,
 persisted `ProviderReference`/GET-via-index routing, durable idempotency, frontend
-wiring, trusted-field removal, and a multi-activity execution plan domain per an
-ADO-only decision referred to as "ADR-008" — no such ADR was ever written in this
-repository; see `implementation-progress.md` for the backfill and this gap).
+wiring, trusted-field removal, and a multi-activity execution plan domain per
+[ADR-008](./ADR-008-multi-activity-change-execution-plan.md), accepted at the
+F2.1.2 architecture review).
 
 F2.2 adds the smallest useful discovery surface on top of that baseline: `GET
 /changes`, backed by the platform canonical index described in

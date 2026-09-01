@@ -2,7 +2,7 @@
 
 > Status: **normative UI reference — F2.2 read surface**
 >
-> Related ADRs: [ADR-006](../adr/ADR-006-change-management-backend-contract.md) · [ADR-007](../adr/ADR-007-change-record-authority.md) ("Clarification — discovery/listing vs. detail authority") · [ADR-008](#note-on-adr-008) (does not exist)
+> Related ADRs: [ADR-006](../adr/ADR-006-change-management-backend-contract.md) · [ADR-007](../adr/ADR-007-change-record-authority.md) ("Clarification — discovery/listing vs. detail authority") · [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md) (execution plan domain)
 >
 > Related UI: [`gmud-create-screen.md`](./gmud-create-screen.md) · [`gmud-my-changes-screen.md`](./gmud-my-changes-screen.md)
 
@@ -203,10 +203,11 @@ this model and must never appear in this screen's props, DOM, or network payload
 
 ## Note on ADR-008
 
-`executionPlan` above was introduced in ADO commit `5e4f30e`, which cites "per
-ADR-008" — no such ADR exists in this repository. This screen documents the
-execution plan model as it exists in code today; it does not retroactively
-legitimize the missing ADR. See `implementation-progress.md` §12 for the gap.
+`executionPlan` above was introduced in ADO commit `5e4f30e` per
+[ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md), accepted at the
+F2.1.2 architecture review (2026-09-01). This screen's execution plan rendering
+rules (immutable, ordered, no per-activity status) follow that ADR's terminology
+and constraints directly — see `implementation-progress.md` §14 for the checkpoint.
 
 ## F2.2 stop condition
 

@@ -3,7 +3,7 @@
 > **Bridge repository:** `diegofernandes-dev/poc-teams-approval` — architectural handoff (this document)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal` — authoritative source code  
 > **Checkpoint:** F2.2 — My Changes List + Change Detail (complete) · F2.1–F2.1.3 prior  
-> **Prior checkpoints:** F1 (frontend shell) · F1.1 (visual polish) · F1.2 (Backstage-first composition) · F1.3 (semantic UX) · F1.4 (integrity cleanup) · F2.0 (backend contract & architecture) · F2.1–F2.1.3 (durable index, DevelopmentProvider, idempotency recovery, execution plan domain — see §12 backfill)  
+> **Prior checkpoints:** F1 (frontend shell) · F1.1 (visual polish) · F1.2 (Backstage-first composition) · F1.3 (semantic UX) · F1.4 (integrity cleanup) · F2.0 (backend contract & architecture) · F2.1 (durable index + DevelopmentProvider) · F2.1.1 (idempotency recovery) · F2.1.2 (execution plan domain, ADR-008) · F2.1.3 (frontend wiring)  
 > **UI reference:** [`gmud-create-screen.md`](../ui/gmud-create-screen.md) · [`gmud-my-changes-screen.md`](../ui/gmud-my-changes-screen.md) · [`gmud-detail-screen.md`](../ui/gmud-detail-screen.md) · Backend contract: [ADR-006](../adr/ADR-006-change-management-backend-contract.md)  
 > **Status:** F2.2 complete — **STOP** before F3 (approvals, workflow, real ITSM providers, Teams, CAB, ADO correlation, evidence upload, editing)
 >
@@ -656,62 +656,372 @@ Per ADR-007 conditional GO:
 
 ---
 
-## 12. GMUD F2.1 → F2.1.3 — baseline backfill (undocumented ADO commits)
+## 12. F2.1 backend persistence checkpoint (Model C)
 
-**Checkpoint:** Documentation debt resolution, not a new implementation slice. §11
-above accepted ADR-007 and authorized F2.1 ADO coding on **2026-08-31**. Four ADO
-commits then landed on `feat/ado-repo-governance` — `0dc3ed4`, `ed6810b`, `5e4f30e`,
-`75da44f` — without a corresponding bridge handoff. This section is a **condensed
-backfill**, reconstructed from the ADO source at the F2.2 checkpoint, not a
-contemporaneous per-commit handoff. Treat commit-level detail as approximate; the
-architecture-level claims are verified against the code as of `75da44f`.
+**Checkpoint:** F2.1 durable canonical index + `DevelopmentProvider` (backend only; no frontend wiring).
 
-### Commits covered
+### ADO implementation summary
 
-| SHA | Message | Summary (reconstructed) |
-|---|---|---|
-| `0dc3ed4` | `feat(gmud): F2.1 durable canonical index and DevelopmentProvider` | Implements ADR-007 Model C: `change_index` + `development_change_records` tables (knex migration `20260831120000_initial.cjs`), `KnexChangeIndexRepository`, `KnexIdempotencyRepository`, `DatabaseChangeIdGenerator`, `DevelopmentProvider`, `ProviderRegistry`. GET now routes via `indexRecord.providerKey`, not a direct fake-provider call. |
-| `ed6810b` | `feat(gmud): F2.1.1 idempotency recovery and crash-safe retry semantics` | Two-phase create (`insertPending` → provider write → `finalize`, transactional for `DevelopmentProvider`) with crash-recovery paths (`ChangeManagementService.recovery.test.ts`): resumes a reserved-but-uncompleted idempotency record without re-consuming the `changeId` sequence, and logs `change.create.orphan` when an index row exists without a completed idempotency record. |
-| `5e4f30e` | `feat(gmud): F2.1.2 multi-activity execution plan domain` | Adds `ExecutionActivity`/`ExecutionPlan` to the canonical `Change` and `CreateChangeHttpRequest` (required, 1–20 activities), `executionPlanValidator.ts` (`responsibleRef` must resolve as a Catalog `Group`, optional `targetRef` as a `Component`), and migration `20260901120000_add_execution_plan_to_change_index.cjs`. The commit message cites "per ADR-008" — **no ADR-008 exists in this repository**; see "Unresolved questions" below. |
-| `75da44f` | `feat(gmud): wire execution plan to real backend` | Connects the F1.4 create form to the real `POST /changes` endpoint (discovery + fetch, `Idempotency-Key` header, idempotency-key lifecycle on the client), including the multi-activity plan UI (`GmudForm.tsx` add/remove activities). This is the "separate checkpoint — stop for review after backend persistence" §11 flagged; it proceeded without that review gate being exercised in the bridge. |
-
-### Architecture conformance (verified against ADO at `75da44f`)
-
-| ADR-007 requirement | Verified state |
+| Component | Implementation |
 |---|---|
-| `IChangeManagementProvider` retained, not replaced by a monolithic repository | Yes — `DevelopmentProvider implements IChangeManagementProvider`; `ChangeManagementService` still calls `providerRegistry.resolve(providerKey)` on read |
-| Immutable `providerKey` recorded in the index | Yes — `change_index.provider_key`, written once at `insertPending`, never rewritten |
-| GET routes index → provider, not index-only | Yes — `findFinalizedByChangeId` then `provider.get(changeId)`; index snapshot is not returned as the public response |
-| No public workflow statuses introduced | Yes — `ChangeStatus = 'submitted'` only |
-| Canonical index minimum fields present | Yes, plus `execution_plan_json` (§ ADR-008 gap below) |
+| `ChangeIndexRepository` | `KnexChangeIndexRepository` → `change_index` |
+| `IdempotencyRepository` | `KnexIdempotencyRepository` → `change_idempotency` |
+| `ChangeIdGenerator` | `DatabaseChangeIdGenerator` → `change_id_sequences` |
+| `ProviderRegistry` | `DefaultProviderRegistry` — default from `changeManagement.provider` |
+| `DevelopmentProvider` | `development_change_records` — non-production operational store |
+| HTTP routes | Unchanged POST/GET contract |
+| Status | `submitted` only |
 
-### Deviations from ADR-006/ADR-007 at time of backfill
+### Migration
 
-| Topic | ADR-006/007 (pre-F2.1) | ADO `75da44f` | Resolution |
-|---|---|---|---|
-| Execution plan domain | Not modeled — single-change fields only | `ExecutionActivity[]`/`ExecutionPlan` added to `Change` and the create contract | Documented here; no ADR-008 was written. Treated as an accepted architecture extension, not a drift, since it follows the same provider-neutral, no-workflow-status constraints as the rest of the domain — but the gap should be closed with a real ADR before further execution-plan semantics (ordering, per-activity status) are added |
-| Frontend wiring timing | §11 flagged wiring as a "separate checkpoint — stop for review" | Wiring landed in the same commit range as F2.1.1/F2.1.2, without an intervening bridge review | Reported here as a process deviation; no architectural harm found — the wired contract matches ADR-006 §"Trusted create request contract" field-for-field |
+| File | Tables |
+|---|---|
+| `packages/backend/migrations/change-management/20260831120000_initial.cjs` | `change_index`, `change_idempotency`, `change_id_sequences`, `development_change_records` |
 
-### Unresolved questions
+### Tests executed (ADO)
 
-1. **ADR-008 does not exist.** Commit `5e4f30e` cites "per ADR-008" for the execution
-   plan domain; this repository's ADR set stops at ADR-007. Writing ADR-008 is
-   explicitly **not** part of this backfill or of F2.2 — it requires product
-   decisions (activity ordering/dependency semantics, per-activity status,
-   min/max counts, idempotency payload-hash coverage) that are out of scope for a
-   documentation catch-up. Flagged for a future architecture slice.
-2. Per-commit bridge handoffs were skipped for F2.1–F2.1.3; this backfill restores
-   the paper trail but cannot recover intermediate design rationale that was never
-   written down.
+```bash
+yarn workspace backend lint                    # PASS
+yarn workspace backend test --watchAll=false   # PASS 71/71 (17 suites)
+```
 
-### Next recommended slice
+Coverage includes: canonical index persistence, immutable `providerKey`, GET routing via stored key, durable idempotency (same-key/conflict/concurrent), platform-owned `changeId`, provider failure 503, auth on historical snapshots, architecture guards (no Model B), degraded read returns 503.
 
-F2.2 — My Changes List + Change Detail (§13 below). No further F2.1.x backfill
-needed; §13 picks up from `75da44f`.
+### Deviations
+
+| Item | Notes |
+|---|---|
+| Frontend wiring | **Intentionally deferred** per F2.1 backend-only checkpoint scope |
+| Degraded read | Returns **503** when provider unavailable; explicit `meta.source` deferred to future slice |
+| Idempotency FK | No FK from `change_idempotency.change_id` → `change_index` (allows early reserve before index insert) |
+| Orphan local SQLite | Prior Model B-shaped `changes` table in dev data discarded; fresh Model C migration used |
+
+### Failure / recovery (documented)
+
+| Scenario | Behavior |
+|---|---|
+| Provider fails before finalize | 503 to client; pending index row not visible on GET; idempotency `pending` |
+| Provider succeeds, index finalize fails | Log `change.create.orphan`; 503 to client; idempotent retry via same `Idempotency-Key` |
+| `DevelopmentProvider` (same DB) | `provider.create` + index finalize + idempotency complete in single Knex transaction |
+
+Production ITSM adapters must implement idempotent `create` by platform `changeId` for safe retry.
+
+### Architecture review answers
+
+1. `ChangeManagementService` depends on `IChangeManagementProvider` via `ProviderRegistry` — **Yes**
+2. `providerKey` immutable and persisted — **Yes** (`change_index.provider_key`)
+3. Historical records route to original provider — **Yes** (GET uses stored `providerKey`)
+4. `changeId` platform-owned — **Yes** (`DatabaseChangeIdGenerator`)
+5. Idempotency platform-owned — **Yes** (`IdempotencyRepository`)
+6. `ownerRef`/`systemRef` historical snapshots — **Yes** (no Catalog re-fetch on GET)
+7. Canonical index distinct from provider persistence — **Yes** (separate tables + interface)
+8. Model B accidentally implemented — **No** (`IChangeManagementProvider` active; no monolithic `ChangeRepository`)
+9. Provider succeeds, index finalize fails — Orphan logged; 503; retry runbook documented above
+10. Ready for frontend wiring — **Conditional GO** after architecture review
+
+### Gate
+
+| Gate | Status |
+|---|---|
+| F2.1 backend persistence | **Complete** (awaiting review) |
+| Frontend wiring | **STOP** until review |
+| SharePoint/Jira/ServiceNow | **STOP** |
+
+### ADO commit
+
+**`0dc3ed4`** on branch `feat/ado-repo-governance` (baseline F2.0: `b2bed17`).
+
+```text
+feat(gmud): F2.1 durable canonical index and DevelopmentProvider
+```
+
+### Bridge commit
+
+**`196949c`** — records ADO F2.1 commit `0dc3ed4` (follow-up to initial handoff `c1691f9`).
 
 ---
 
-## 13. GMUD F2.2 — My Changes List + Change Detail
+## 13. F2.1.1 idempotency recovery checkpoint
+
+**Checkpoint:** Crash-safe idempotency retry semantics (backend only; no frontend wiring).
+
+**Baseline:** ADO F2.1 commit `0dc3ed4`.
+
+### Idempotency state machine
+
+| State | Meaning |
+|---|---|
+| `pending` | Request reserved; `changeId` may be assigned; finalize not yet complete |
+| `completed` | Index finalized and idempotency closed — same key+payload returns cached result |
+
+Stored per record: `idempotencyKey`, `payloadHash`, `changeId`, `state`, `status`, `createdAt`.
+
+### Retry semantics
+
+| Idempotency | Index | Retry action |
+|---|---|---|
+| `completed` | any | Return cached `{ changeId, status }` |
+| `pending` | finalized | Heal: `complete()` idempotency, return result (Case 3) |
+| `pending` | unfinalized + `changeId` | Resume `finalizeCreate()` with same `changeId` |
+| `pending` | no index + `changeId` | `insertPending()` then `finalizeCreate()` (Case 1) |
+| any | any | Same key + different payload → **409** |
+
+### Provider idempotency guarantee
+
+`IChangeManagementProvider.create(change)` must be idempotent by canonical `change.changeId`. Proven in `DevelopmentProvider` (upsert) and `FakeChangeManagementProvider` (test adapter).
+
+### Crash cases covered (tests)
+
+| Case | Scenario | Verified |
+|---|---|---|
+| 1 | `changeId` claimed, crash before provider | Resume with same `changeId` |
+| 2 | Provider OK, finalize fails (orphan) | Retry reconciles; orphan log with `idempotencyKey` |
+| 3 | Index finalized, idempotency pending | Heal to `completed` without provider call |
+| 4 | Provider fails | Retry same `changeId` after provider available |
+| — | Concurrent same-key | Single `changeId`, single provider record, single finalized index |
+| — | Failed retry | No second sequence allocation |
+| — | Pending payload conflict | **409** |
+
+### ADO files changed
+
+| Path | Change |
+|---|---|
+| `ChangeManagementService.ts` | Recovery helpers (`tryResolveIdempotentCreate`, `healCompletedIdempotency`); `change.create.recover` log; orphan log includes `idempotencyKey` |
+| `IChangeManagementProvider.ts` | Idempotent create contract (JSDoc) |
+| `FakeChangeManagementProvider.ts` | Upsert-by-`changeId`; create call counter for tests |
+| `KnexIdempotencyRepository.ts` | Idempotent `complete()` (`WHERE state = pending`) |
+| `testHelpers.ts` | Seed helpers, `FaultInjectingChangeIndexRepository` |
+| `ChangeManagementService.recovery.test.ts` | Fault-injection recovery tests (new) |
+| `DevelopmentProvider.test.ts` | Provider idempotency proof (new) |
+| `ChangeManagementService.integration.test.ts` | Concurrent provider/index dedup assertion |
+
+### Tests executed (ADO)
+
+```bash
+yarn workspace backend lint                    # PASS
+yarn workspace backend test --watchAll=false   # PASS 80/80 (19 suites)
+```
+
+### Architecture review answers (F2.1.1)
+
+1. Durable idempotency states — `pending`, `completed` only
+2. `changeId` assigned once per key — **Yes** (`claimChangeId`)
+3. Pending resumed — synchronous retry with stored `changeId`
+4. Provider.create already succeeded — idempotent create + finalize + complete
+5. Safe to call provider.create twice — **Yes** (required contract)
+6. Finalized index + pending idempotency — heal to `completed`, no provider call
+7. Concurrent same-key duplicates — **No** (DB PK + conditional claim + tests)
+8. Recovery cannot complete — **503**, never new `changeId` for same key
+9. Background reconciler required — **No**
+10. Frontend wiring safe after checkpoint — **Conditional GO** after architecture review
+
+### Deviations
+
+| Item | Notes |
+|---|---|
+| Internal `changeId` allocated before client-visible success | Unchanged from F2.1 — client still gets 503 until finalize |
+| No idempotency FK to index | Unchanged — intentional for early reserve |
+| ADO commit SHA | **`ed6810b`** on `feat/ado-repo-governance` (baseline F2.1: `0dc3ed4`) |
+
+### Unresolved reliability risks
+
+- External ITSM adapters must implement idempotent create by platform `changeId` before production use
+- Lost `claimChangeId` race may consume an extra sequence number (uniqueness preserved)
+- No TTL/sweeper for abandoned pending requests without retries (acceptable — retry-driven recovery)
+
+### Gate
+
+| Gate | Status |
+|---|---|
+| F2.1.1 idempotency recovery | **Complete** (awaiting review) |
+| Frontend wiring | **STOP** until F2.1.1 review |
+| SharePoint/Jira/ServiceNow | **STOP** |
+
+### ADO commit
+
+**`ed6810b`** on branch `feat/ado-repo-governance` (baseline F2.1: `0dc3ed4`).
+
+```text
+feat(gmud): F2.1.1 idempotency recovery and crash-safe retry semantics
+```
+
+### Bridge commit
+
+**`a65e1ed`** · **`44729aa`** · **`afaaaf6`** on branch `main` (ADO SHA `ed6810b`).
+
+---
+
+## 14. F2.1.2 — Multi-activity execution plan (architecture + backend)
+
+### Checkpoint summary
+
+F2.1.2 extends the canonical GMUD domain with **`ExecutionPlan`** / **`ExecutionActivity`** per [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md). A single GMUD may describe multiple planned execution activities with different responsible teams and optional activity-specific targets.
+
+**Backend only** — frontend wiring and Plano de execução UI remain deferred to F2.1.3.
+
+### Architecture decisions (ADR-008)
+
+| Topic | Decision |
+|---|---|
+| Cardinality | `executionPlan.activities` required, min 1, max 20 |
+| `Change.targetRef` | Retained as primary catalog anchor |
+| `ownerRef` vs `responsibleRef` | Owner = governance (server-derived); responsible = activity team (client Group) |
+| Activity `targetRef` | Optional Component |
+| Ordering | Array order authoritative; no `sequence` / `dependsOn` |
+| Window / rollback | Change-level only |
+| Activity status | **Rejected** — no workflow states |
+| Authorization | `responsibleRef` does **not** grant read access (F3) |
+| Index snapshot | Full immutable `executionPlan` with server `activityId`s |
+
+### ADO files changed
+
+| Path | Change |
+|---|---|
+| `types.ts` | `ExecutionPlan`, `ExecutionActivity`, `ExecutionActivityInput` types on `Change` / `CreateChangeHttpRequest` |
+| `validation.ts` | Zod schema for `executionPlan` (min 1, max 20 activities) |
+| `executionPlanValidator.ts` | Catalog validation for Group `responsibleRef`, optional Component `targetRef` |
+| `ChangeManagementService.ts` | Validate plan; assign `activityId` (UUID) at create |
+| `persistence/changeIndexMapper.ts` | `execution_plan_json` snapshot column mapping |
+| `migrations/change-management/20260901120000_add_execution_plan_to_change_index.cjs` | Index migration |
+| `testHelpers.ts` | Default `executionPlan` in `validRequest` |
+| `plugins/change-management/src/model/types.ts` | Shared GET model + optional POST `executionPlan` until F2.1.3 UI |
+| `executionPlanValidator.test.ts` | Validator unit tests (new) |
+| `ChangeManagementService.test.ts` | Persistence + idempotency conflict tests |
+
+### Tests executed (ADO)
+
+```bash
+yarn workspace backend lint                    # PASS
+yarn workspace backend test --watchAll=false   # PASS 88/88 (20 suites)
+```
+
+### Gate
+
+| Gate | Status |
+|---|---|
+| F2.1.2 architecture | **Accepted** — ADR-008 |
+| F2.1.2 backend | **Complete** |
+| Frontend wiring | **STOP** until F2.1.3 |
+| SharePoint/Jira/ServiceNow | **STOP** |
+
+### Architecture review answers (F2.1.2)
+
+1. `executionPlan` required — **Yes** (min 1 activity)
+2. `Change.targetRef` retained — **Yes** (primary catalog anchor)
+3. `responsibleRef` = Catalog Group only — **Yes**
+4. Activity `targetRef` optional Component — **Yes**
+5. Per-activity status/workflow — **Rejected**
+6. `responsibleRef` grants read — **No** (deferred F3)
+7. Index snapshot includes full plan — **Yes**
+8. Idempotency includes plan in hash — **Yes**
+9. Frontend UI — **STOP** until F2.1.3
+
+### Deviations
+
+None — ADO implementation matches ADR-008.
+
+### Bridge commit
+
+**`afb154b`** · **`75b4f38`** on branch `main` (ADR-008 + handoff).
+
+### ADO commit
+
+**`5e4f30e`** on branch `feat/ado-repo-governance` (baseline F2.1.1: `ed6810b`).
+
+```text
+feat(gmud): F2.1.2 multi-activity execution plan domain
+```
+
+---
+
+## 15. F2.1.3 — Frontend execution plan + real backend wiring
+
+### Checkpoint summary
+
+The `/gmud` route now completes the first real creation path:
+
+```text
+GmudCreatePage → ChangeManagementApi → ChangeManagementClient
+→ POST /api/change-management/changes → ChangeManagementService
+→ Model C persistence + DevelopmentProvider
+```
+
+The form has five numbered sections and starts with exactly one empty execution
+activity. It supports 1–20 ordered activities, requires a Catalog Group as
+`responsibleRef`, accepts an optional Catalog Component as activity `targetRef`, and
+does not expose provider, workflow, approval, status, pipeline, or ADO concerns.
+
+Success uses the POST result and a submitted-form snapshot to show the canonical
+`changeId`. No create-time GET, detail route, provider metadata, or automatic HTTP retry
+was introduced.
+
+### ADO files changed
+
+| Area | Files / result |
+|---|---|
+| API abstraction and wiring | `ChangeManagementApi.ts`, `ChangeManagementClient.ts`, `changeManagementErrors.ts`; discovery/fetch real client is the default; mock remains test/fixture-only |
+| Form and success UX | `GmudCreatePage.tsx`, `GmudForm.tsx`, `GmudCreatedSummary.tsx`, `ApprovalFlowRail.tsx`, `gmudCreateStyles.ts` |
+| Trusted transport and retry helpers | `buildCreateHttpBody.ts`, `gmudFormValidation.ts`, `idempotencyKey.ts`, `mapChangeManagementError.ts` |
+| Public frontend types | `model/types.ts`, `index.ts`; `CreateChangeHttpBody.executionPlan` is required and create is the only API operation in this slice |
+| Frontend tests/config | API client, form, submit, payload, validation, error, model, and plugin wiring tests; plugin Jest worker cap |
+| Backend proof only | `ChangeManagementService.test.ts` proves actor A/key X and actor B/key X are independent; no backend implementation, schema, provider contract, or migration changed |
+
+### Idempotency decision
+
+Backend inspection confirmed the existing durable key is
+`(operation, requested_by, idempotency_key)`. The actor is obtained from backend
+authentication, never from frontend input. Therefore:
+
+- same actor + key + same payload returns the original result;
+- same actor + key + different payload returns 409;
+- different actors + the same key use independent namespaces.
+
+The frontend creates one UUID on the first valid submit, reuses it after network/
+transport failures, `PROVIDER_UNAVAILABLE`, or another 5xx, and invalidates it after
+any scalar or activity mutation. It clears the key on 400/403/409 and after success.
+
+### Required verification
+
+```text
+yarn workspace @internal/plugin-change-management test --watchAll=false  PASS (40/40, 10 suites)
+yarn workspace @internal/plugin-change-management lint                   PASS
+yarn workspace @internal/plugin-change-management build                  PASS
+yarn workspace backend test --watchAll=false                             PASS (89/89, 20 suites)
+yarn workspace backend lint                                              PASS
+git diff --check                                                          PASS
+```
+
+### Final review answers
+
+1. Real frontend uses `ChangeManagementApi` — **Yes**.
+2. `MockChangeManagementApi` inactive in normal runtime — **Yes**; tests/fixtures only.
+3. POST excludes `requestedBy` / `ownerRef` / `systemRef` — **Yes**.
+4. `executionPlan` always has at least one activity — **Yes**; UI and backend validation.
+5. `responsibleRef` selected as Catalog Group — **Yes**.
+6. `activityId` backend-only — **Yes**.
+7. Same logical retry reuses `Idempotency-Key` — **Yes** for retryable failures.
+8. Form mutation produces a new key — **Yes**, including activity changes.
+9. Idempotency scoped to authenticated actor — **Yes**, existing composite key plus explicit test.
+10. Canonical backend `changeId` displayed after success — **Yes**, from POST without GET.
+11. Provider/ADO/workflow concern leaked into frontend — **No**.
+12. End-to-end create path ready for functional review — **Yes: GO**; login and authenticated browser creation are the functional review.
+
+### Deviations and known observations
+
+- No architecture/domain deviation and no ADR-008 change.
+- The plan's `PROVIDER_UNAVAILABLE` error code is used exactly; no obsolete `PERSISTENCE_UNAVAILABLE` frontend mapping remains.
+- The extra repository-wide `yarn tsc:full` diagnostic (not a required gate) still reports pre-existing third-party Backstage/react-use declaration conflicts and existing Knex typing errors in `changeManagementPlugin.ts`. Package build and both required lints pass.
+- Jest emits existing React/MUI `findDOMNode` deprecation warnings; they do not fail tests.
+- Authenticated browser login/create was intentionally not automated here; it is the requested functional review gate.
+
+### Commits and gate
+
+- ADO: **`75da44fb46d308e23b1c987e2093636fa4811b92`** on `feat/ado-repo-governance` (baseline `5e4f30e`).
+- Bridge: this handoff commit on `main` (baseline `412822bc89df4058e0649c812bb4e7e4296a3c01`).
+- Functional review: **GO**.
+- Next implementation slice: **STOP** pending architecture review.
+
+## 16. GMUD F2.2 — My Changes List + Change Detail
 
 **Checkpoint:** F2.2 — read UX closing create → discover → open → read. **STOP** —
 do not begin F3 (approvals, workflow, real ITSM providers, Teams, CAB, ADO
@@ -749,8 +1059,8 @@ scope (F2.2)" and [ADR-007](../adr/ADR-007-change-record-authority.md) "Clarific
 |---|---|
 | `docs/adr/ADR-006-change-management-backend-contract.md` | `GET /changes` added to HTTP contract; new "List read scope (F2.2)" subsection; F2.2 addendum |
 | `docs/adr/ADR-007-change-record-authority.md` | New "Clarification — discovery/listing vs. detail authority (F2.2)" section |
-| `docs/backstage/current-state.md` | F2.2 snapshot — list/detail delivered, F2.1–F2.1.3 backfilled |
-| `docs/backstage/implementation-progress.md` | §12 (F2.1–F2.1.3 backfill) and this section |
+| `docs/backstage/current-state.md` | F2.2 snapshot — list/detail delivered |
+| `docs/backstage/implementation-progress.md` | This section (§16) |
 | `docs/ui/gmud-my-changes-screen.md` | New — normative UI contract for the list page |
 | `docs/ui/gmud-detail-screen.md` | New — normative UI contract for the detail page |
 | `docs/ui/gmud-create-screen.md` | Post-create navigation section added (Ver GMUD / Criar outra GMUD / Voltar para Minhas GMUDs) |
@@ -829,9 +1139,28 @@ the run.
 
 ### Deviations
 
-None between the ADO implementation and this checkpoint's scope at time of handoff.
-Carried forward from §12: **ADR-008 still does not exist** — this remains an open
-documentation gap, not introduced or resolved by F2.2.
+None between the ADO implementation and ADR-006/ADR-007 (as amended for F2.2) at
+time of handoff — `GET /changes` behaves exactly as documented in ADR-006 "List
+read scope (F2.2)", and detail routing is unchanged.
+
+**Process deviation, corrected before this commit:** the F2.2 implementation
+session began from a local bridge clone pinned to `8c153ce` and did not run
+`git fetch origin main` before starting, so it was unaware that §12–§15 above
+(the real F2.1–F2.1.3 handoffs) and ADR-008 already existed at `f5f131f`. This
+produced two mistakes in the first draft of this handoff, both discovered and
+reconciled via a merge before this commit landed:
+
+1. A redundant, independently-reconstructed "F2.1 → F2.1.3 baseline backfill"
+   section — discarded in favor of the real §12–§15 above once `f5f131f` was
+   fetched. Its technical claims matched the real handoffs on comparison, so no
+   architectural correction was needed, only de-duplication.
+2. An incorrect claim, repeated in ADR-006, ADR-007, `current-state.md`, and the
+   final report given to the user, that **ADR-008 does not exist**. It exists —
+   accepted at the F2.1.2 architecture review, 2026-09-01 — and is referenced
+   correctly throughout this document and the ADRs as of this commit.
+
+Lesson for future GMUD checkpoints: `git fetch origin <branch>` and diff against
+it before starting a bridge documentation session, not only before pushing.
 
 ### Unresolved questions
 
@@ -839,7 +1168,6 @@ documentation gap, not introduced or resolved by F2.2.
    across other actors' changes is deferred to F3 — not attempted here.
 2. `created_at` has no dedicated index; acceptable at dev scale, called out as a
    future concern if `change_index` grows large.
-3. ADR-008 (multi-activity execution plan) remains unwritten — see §12.
 
 ### Next recommended slice (F3)
 

@@ -1,8 +1,8 @@
 # GMUD create screen — UI implementation contract
 
-> Status: **normative UI reference — F1.4 integrity cleanup**
+> Status: **normative UI reference — F2.1.3 create flow implemented**
 >
-> Related ADRs: [ADR-002](../adr/ADR-002-backstage-change-onramp.md) · [ADR-003](../adr/ADR-003-provider-agnostic-change-management.md)
+> Related ADRs: [ADR-002](../adr/ADR-002-backstage-change-onramp.md) · [ADR-003](../adr/ADR-003-provider-agnostic-change-management.md) · [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md)
 >
 > Visual reference: [`gmud-create-reference.jpg`](./gmud-create-reference.jpg) (composition authority; F1.3+ supersedes deployment-centric labels)
 
@@ -15,9 +15,10 @@ This document defines the GMUD creation screen as a **generic production change 
 The screen must answer:
 
 1. **WHAT** will change?
-2. **WHEN** will it happen?
-3. **WHAT IS THE RISK** and how can it be reversed?
-4. **WHAT EVIDENCE** supports the change?
+2. **HOW** will it be executed and by whom? (F2.1.2+ — Plano de execução)
+3. **WHEN** will it happen?
+4. **WHAT IS THE RISK** and how can it be reversed?
+5. **WHAT EVIDENCE** supports the change?
 
 The right rail answers: **WHAT HAPPENS AFTER I CREATE IT?**
 
@@ -42,7 +43,7 @@ Production scope is communicated by the page subtitle. Do **not** repeat product
 
 ## Desktop layout
 
-- **main column:** ~75–80% width — four numbered form sections in one InfoCard surface;
+- **main column:** ~75–80% width — **five** numbered form sections in one InfoCard surface;
 - **right rail:** ~20–25% — Fluxo da Mudança, Status, Identificador;
 - responsive: rail stacks below form on narrow screens.
 
@@ -103,10 +104,38 @@ Examples: repository link, build definition, catalog source link, service metada
 - Helper copy when shown: references are from the catalog target, not evidence of the change itself.
 - Do **not** include target context in `evidence[]` on submit in F1.4.
 
-## Section 2 — Janela de Execução
+## Section 2 — Plano de execução (implemented in F2.1.3)
 
 ```text
-2  Janela de Execução
+2  Plano de execução
+```
+
+Describes **planned execution activities** — who performs each unit of work. This is **not** a workflow board, task tracker, or approval step list.
+
+| Field | Purpose |
+|---|---|
+| **Título** | Short activity title |
+| **Descrição** | What this activity entails |
+| **Equipe executora** | Catalog **Group** responsible for the activity (`responsibleRef`) |
+| **Alvo opcional** | Activity-specific Catalog **Component** when it differs from Section 1 (`targetRef`) |
+
+Composition:
+
+- Default: **exactly one empty activity**.
+- `[ + Adicionar atividade ]` adds rows; cap at 20 activities.
+- Remove is available only while more than one activity exists; the final activity cannot be removed.
+- Array order is the intended human-readable sequence — no drag-and-drop dependency graph.
+
+**Terminology:** Section 1 **Responsável** = governance owner of the primary target (`ownerRef`). Section 2 **Equipe executora** = team expected to perform that activity (`responsibleRef`). Do not overload "Responsável" for activities.
+
+Canonical model: `executionPlan: { activities: [{ title, description, responsibleRef, targetRef? }] }`. Server assigns `activityId` on create.
+
+`Equipe executora` uses Catalog Group entities only. `Alvo opcional` uses Catalog Component entities only and may remain empty. An empty Group catalog leaves the picker empty with safe feedback; arbitrary text is not accepted.
+
+## Section 3 — Janela de Execução
+
+```text
+3  Janela de Execução
 ```
 
 | Field | Purpose |
@@ -117,10 +146,10 @@ Examples: repository link, build definition, catalog source link, service metada
 
 This is **execution planning**, not pipeline/deployment scheduling. Canonical model: `requestedWindow: { date, startsAt, endsAt }`.
 
-## Section 3 — Avaliação de Risco
+## Section 4 — Avaliação de Risco
 
 ```text
-3  Avaliação de Risco
+4  Avaliação de Risco
 ```
 
 Stacked composition (do **not** place risk selector beside the reversal plan):
@@ -139,10 +168,10 @@ Works for software, infrastructure, database, network, and manual operational ch
 
 Do not use deployment-only examples (containers, images, pipelines) in placeholders unless shown conditionally in future context.
 
-## Section 4 — Evidências
+## Section 5 — Evidências
 
 ```text
-4  Evidências
+5  Evidências
 ```
 
 **Change evidence** — artifacts that support evaluation and audit of **this specific change**.
@@ -222,7 +251,7 @@ route change, no navigation away from `/gmud/new`) offering:
 | **Voltar para Minhas GMUDs** | Navigates to `/gmud` — the [My Changes list](./gmud-my-changes-screen.md) |
 
 The user is never required to remember or copy the `changeId` to find the GMUD
-again. See `implementation-progress.md` §13 for the backend/frontend wiring.
+again. See `implementation-progress.md` §16 for the backend/frontend wiring.
 
 ## Canonical frontend model
 
@@ -239,14 +268,30 @@ CreateChangeRequest {
   risk: 'low' | 'medium' | 'high';
   rollbackPlan: string;
   evidence: ChangeEvidence[];  // F1.4: empty until change-specific evidence exists
+  executionPlan: {             // F2.1.2+ — required on POST; min 1 activity
+    activities: Array<{
+      title: string;
+      description: string;
+      responsibleRef: string;  // Catalog Group
+      targetRef?: string;      // optional Component
+    }>;
+  };
 }
 ```
 
 **Removed / not reintroduced:** `environment`, `artifactVersion`, `componentRef`, `provider`, `teamsUserId`, `adoApprovalId`, `cabDeferredApprovalId`
 
-## F1.4 stop condition
+## F2.1.3 submit and confirmation behavior
 
-After integrity cleanup: **STOP**. No backend, persistence, ITSM providers, workflow engine, provider integration, or expanded catalog target types.
+- Normal runtime uses `ChangeManagementApi` backed by Backstage discovery/fetch and POSTs to the backend capability URL.
+- The transport mapper sends only editable business fields and ordered execution activities; contextual/derived/server/provider fields are excluded.
+- One UUID represents one logical submission. It is retained for network, transport, `PROVIDER_UNAVAILABLE`, and other 5xx failures; mutation of any business field invalidates it. Responses 400/403/409 and success clear it. There is no automatic HTTP retry.
+- Success replaces the form with a confirmation containing the canonical POST `changeId` and a snapshot of submitted content. No GET or detail route is required.
+- `Criar outra GMUD` resets the form to exactly one empty activity and no prior idempotency key.
+
+## F2.1.3 stop condition
+
+After the real create path: **STOP**. No ITSM providers, list/detail UI, attachment upload, activity workflow/status/approval/dependencies/execution, Teams, CAB, or Azure DevOps integration.
 
 ## Screenshots
 

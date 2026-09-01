@@ -2,7 +2,7 @@
 
 - Status: Accepted (F2.0 architecture review; stakeholder acceptance 2026-08-31)
 - Date: 2026-08-30
-- Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md), [ADR-006](./ADR-006-change-management-backend-contract.md)
+- Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md), [ADR-006](./ADR-006-change-management-backend-contract.md), [ADR-008](./ADR-008-multi-activity-change-execution-plan.md)
 
 ## Context
 
@@ -68,7 +68,7 @@ ChangeManagementService
 |---|---|---|
 | Identity | `changeId` | Canonical public identifier |
 | Routing | `providerKey` (immutable), `externalId`, `externalUrl` | Provider adapter selection |
-| Audit snapshot | `requestedBy`, `targetRef`, `ownerRef`, `systemRef`, `title`, `summary`, `requestedWindow`, `risk`, `classification`, `rollbackPlan`, `status`, `createdAt` | Auth, audit, degraded read when provider unavailable |
+| Audit snapshot | `requestedBy`, `targetRef`, `ownerRef`, `systemRef`, `title`, `summary`, `requestedWindow`, `risk`, `classification`, `rollbackPlan`, `executionPlan`, `status`, `createdAt` | Auth, audit, degraded read when provider unavailable — `executionPlan` per [ADR-008](./ADR-008-multi-activity-change-execution-plan.md) |
 | Idempotency | key → `{ payloadHash, changeId, status }` | Duplicate POST semantics (provider-agnostic) |
 
 The provider persists the full operational record (future workflow state, attachments, CAB fields). Those concerns are explicitly out of platform scope until future ADRs.
