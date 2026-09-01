@@ -1,7 +1,13 @@
 # ADR-005 — CAB scheduling uses deferred approval plus sequential locking
 
-- Status: Proposed — partially validated
+- Status: Proposed historical design — proposed supersession by ADR-009
 - Date: 2026-08-27
+
+> **F3.0 target:** [ADR-009](./ADR-009-change-authorization-model.md) models CAB as
+> one provider-neutral governance decision and separates authorization from runtime
+> window eligibility. If ADR-009 is accepted, CAB-as-an-ADO-post-check/deferred-
+> approval is not the canonical model. Execution-system locking may remain a
+> technical safety control, not business authorization state.
 
 ## Context
 

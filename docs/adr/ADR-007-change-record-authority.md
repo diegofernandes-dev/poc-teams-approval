@@ -2,7 +2,7 @@
 
 - Status: Accepted (F2.0 architecture review; stakeholder acceptance 2026-08-31)
 - Date: 2026-08-30
-- Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md), [ADR-006](./ADR-006-change-management-backend-contract.md), [ADR-008](./ADR-008-multi-activity-change-execution-plan.md)
+- Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md), [ADR-006](./ADR-006-change-management-backend-contract.md), [ADR-008](./ADR-008-multi-activity-change-execution-plan.md), [ADR-009](./ADR-009-change-authorization-model.md)
 
 ## Context
 
@@ -34,6 +34,14 @@ The platform is **not** building a ServiceNow/Jira-like system inside Backstage.
 | **Identity authority** | Platform — `changeId` generation and idempotency |
 | **Approval authority** | Azure DevOps (where applicable) — per ADR-001; unchanged |
 | **Execution authority** | Out of scope |
+
+> **F3.0 proposed authority refinement:** [ADR-009](./ADR-009-change-authorization-model.md)
+> assigns effective approval requirements, resolved-principal snapshots, approval
+> decisions, authorization evaluations, and execution-eligibility evidence to a
+> platform-owned authorization ledger linked to the canonical index. This bounded
+> authorization authority does not replace the provider operational record and does
+> not turn Model C into Model B. If ADR-009 is accepted, it supersedes the
+> “Approval authority = Azure DevOps” row above.
 
 Backstage remains the developer onramp (ADR-002). It does **not** become the enterprise GMUD workflow database.
 

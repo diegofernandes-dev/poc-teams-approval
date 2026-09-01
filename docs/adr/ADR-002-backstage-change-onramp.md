@@ -4,6 +4,12 @@
 
 Accepted for F1.3 frontend slice. F2 backend integration requires a separate architecture review gate.
 
+> **F3.0 proposed refinement:** [ADR-009](./ADR-009-change-authorization-model.md)
+> makes the platform Change Management capability—not the Backstage UI and not
+> Azure DevOps—the authority for business-change authorization evidence. Backstage
+> remains the onramp and is the preferred future CAB workspace. The historical
+> F1/F2 boundaries below describe the implementation baseline and are not rewritten.
+
 ## Context
 
 Production change management (GMUD) in this organization spans multiple systems:

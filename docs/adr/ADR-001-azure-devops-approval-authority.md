@@ -1,7 +1,13 @@
 # ADR-001 — Azure DevOps remains deployment approval authority
 
-- Status: Accepted
+- Status: Accepted historical baseline — proposed supersession by ADR-009
 - Date: 2026-08-27
+
+> **F3.0 target:** [ADR-009](./ADR-009-change-authorization-model.md) proposes that
+> the platform Change Management capability own business-change authorization and
+> that Azure DevOps consume provider-neutral execution eligibility. If ADR-009 is
+> accepted, it supersedes this ADR's approval-authority decision. No ADO integration
+> is changed by the architecture-only F3.0 checkpoint.
 
 ## Context
 

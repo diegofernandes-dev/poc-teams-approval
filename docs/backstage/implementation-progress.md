@@ -2,10 +2,10 @@
 
 > **Bridge repository:** `diegofernandes-dev/poc-teams-approval` — architectural handoff (this document)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal` — authoritative source code  
-> **Checkpoint:** F2.2 — My Changes List + Change Detail (complete) · F2.1–F2.1.3 prior  
+> **Checkpoint:** F3.0 — Change Authorization Architecture (proposed; documentation only) · F2.2.1 implementation baseline
 > **Prior checkpoints:** F1 (frontend shell) · F1.1 (visual polish) · F1.2 (Backstage-first composition) · F1.3 (semantic UX) · F1.4 (integrity cleanup) · F2.0 (backend contract & architecture) · F2.1 (durable index + DevelopmentProvider) · F2.1.1 (idempotency recovery) · F2.1.2 (execution plan domain, ADR-008) · F2.1.3 (frontend wiring)  
 > **UI reference:** [`gmud-create-screen.md`](../ui/gmud-create-screen.md) · [`gmud-my-changes-screen.md`](../ui/gmud-my-changes-screen.md) · [`gmud-detail-screen.md`](../ui/gmud-detail-screen.md) · Backend contract: [ADR-006](../adr/ADR-006-change-management-backend-contract.md)  
-> **Status:** F2.2 complete — **STOP** before F3 (approvals, workflow, real ITSM providers, Teams, CAB, ADO correlation, evidence upload, editing)
+> **Status:** F3.0 architecture documented — **NO-GO** for F3.1 planning until ADR-009 must-decide items are resolved and accepted
 >
 > **Note:** ADO file paths in section 3 are **implementation references** in the Azure DevOps repository, not paths in this bridge repo.
 
@@ -1362,5 +1362,100 @@ without a separate architecture review:
 8. **STOP** before any of the above without review
 
 **F2.2.1 handoff complete.** Wait for architecture review before F3.
+
+---
+
+## 18. GMUD F3.0 — Change Authorization Architecture
+
+**Checkpoint:** Architecture only. No application code, ADO implementation,
+database migration, route, frontend component, Teams integration, CAB UI, pipeline
+enforcement, or real ITSM provider was created or modified.
+
+### Baseline verification
+
+- ADO implementation branch: `feat/ado-repo-governance`
+- ADO implementation HEAD: `6e28611` (exact F2.2.1 baseline)
+- Bridge branch: `main`
+- Bridge baseline before F3.0: `692e697`
+- `git fetch origin main` completed in the GitHub bridge and local
+  `HEAD == origin/main == 692e697` before architecture work
+- Pre-existing untracked `.vscode/` directories were not touched
+
+### Decision summary
+
+[ADR-009](../adr/ADR-009-change-authorization-model.md) proposes:
+
+1. versioned deterministic policy evaluated at submission;
+2. a historically stable authorization instance/round containing effective
+   requirements and resolved-principal snapshots;
+3. policy-generated requirements plus additive-only mandatory requirements;
+4. immutable `approved` / `rejected` decisions with actor authorization evidence;
+5. a minimal Change lifecycle separate from approval progress;
+6. `authorized` as completed pre-execution governance and `executable now` as a
+   separate runtime window/lifecycle/target evaluation;
+7. generic emergency pre-approvers plus non-blocking post-execution CAB review;
+8. CAB as one collective authority decision by default;
+9. Teams as a future individual-decision channel and Backstage as the preferred
+   future CAB Workbench UI, neither authoritative;
+10. a provider-neutral execution request/eligibility boundary consumed by future
+    pipelines;
+11. Model C retained with a bounded platform-owned authorization ledger adjacent
+    to the canonical index;
+12. DevOps removed from happy-path per-deployment approval and retained as policy,
+    control, reliability, observability, and exception owner.
+
+### Authority correction
+
+ADR-001, ADR-004, and ADR-005 are retained as historical ADO-centric POC records.
+Cross-reference notes make the supersession conditional on ADR-009 acceptance; no
+existing implementation is represented as already migrated. ADR-007 Model C is
+not reopened: operational GMUD content remains provider-authoritative, while the
+platform owns only the authorization evidence needed to make platform execution
+decisions.
+
+### Files changed (bridge only)
+
+| Path | Change |
+|---|---|
+| `docs/adr/ADR-009-change-authorization-model.md` | New — complete F3 authorization architecture and review answers |
+| `docs/adr/README.md` | ADR-009 index and proposed target flow; historical ADO ADR context |
+| `docs/adr/ADR-001-azure-devops-approval-authority.md` | Proposed-supersession banner; historical decision preserved |
+| `docs/adr/ADR-002-backstage-change-onramp.md` | Proposed F3 authority/workbench refinement note |
+| `docs/adr/ADR-004-teams-delegated-approval-identity.md` | Proposed-supersession banner for Teams-to-ADO path |
+| `docs/adr/ADR-005-cab-scheduling-and-concurrency.md` | Proposed-supersession banner for CAB-as-ADO-check model |
+| `docs/adr/ADR-007-change-record-authority.md` | Model C authorization-authority refinement note |
+| `docs/ui/gmud-create-screen.md` | Clarifies current “gestor” rail copy is not canonical future policy; no UI change authorized |
+| `docs/backstage/current-state.md` | Proposed F3.0 architecture snapshot and gate |
+| `docs/backstage/implementation-progress.md` | This architecture-only handoff |
+
+### Rejected alternatives
+
+ADR-009 explicitly rejects: DevOps final approval, moving that button to Teams,
+hardcoded manager/CAB/DevOps workflows, corporate-role fields, N CAB clicks by
+default, sole ITSM authorization, canonical ADO Environment approval state,
+workflow-specific status explosion, a generic BPM engine, and a policy DSL from
+day one.
+
+### Open decisions and gate
+
+Nine decisions are mandatory before F3.1 planning: exact policy matrix; policy and
+selector publication; who may add mandatory requirements; rejection/resubmission;
+cancellation; CAB recorder/evidence; emergency retrospective behavior; emergency
+separation of duty; and authorization/auditor permissions.
+
+**Outcome:** F3.0 architecture is ready for stakeholder review. **NO-GO for F3.1
+implementation planning** until those decisions are resolved and ADR-009 is
+accepted. Wait for architecture review; do not implement F3.1.
+
+### ADO files changed
+
+None. ADO remains at implementation baseline `6e28611`.
+
+### Deviations
+
+None from the architecture-only scope. The initial `git fetch origin main` attempted
+from the ADO working tree could not authenticate because its `origin` is Azure
+DevOps; the canonical GitHub bridge was then located, fetched successfully, and
+verified at `692e697` before any documentation edit.
 
 ---

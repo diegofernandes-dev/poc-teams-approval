@@ -1,7 +1,12 @@
 # ADR-004 — Teams approvals use delegated Azure DevOps user identity
 
-- Status: Proposed — technical validation required
+- Status: Proposed historical design — proposed supersession by ADR-009
 - Date: 2026-08-27
+
+> **F3.0 target:** [ADR-009](./ADR-009-change-authorization-model.md) keeps Teams as
+> an interaction channel but routes human decisions to Change Management rather
+> than patching an Azure DevOps approval object. If ADR-009 is accepted, this
+> delegated Teams-to-ADO design is not the target authorization path.
 
 ## Context
 
