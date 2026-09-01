@@ -10,15 +10,15 @@ The branch `docs/architecture-decisions-mvp` is **superseded by `main`** as of G
 
 | ADR | Title | Status |
 |---|---|---|
-| ADR-001 | Azure DevOps remains deployment approval authority | Accepted historical baseline; proposed supersession by ADR-009 |
+| ADR-001 | Azure DevOps remains deployment approval authority | Accepted historical baseline; superseded by ADR-009 |
 | ADR-002 | Backstage is the change-request onramp | Accepted (F1.3 frontend) |
 | ADR-003 | Change management is provider-agnostic | Accepted |
-| ADR-004 | Teams approvals use delegated Azure DevOps user identity | Proposed historical design; proposed supersession by ADR-009 |
-| ADR-005 | CAB scheduling uses deferred approval plus sequential locking | Proposed historical design; proposed supersession by ADR-009 |
+| ADR-004 | Teams approvals use delegated Azure DevOps user identity | Proposed historical design; superseded as target by ADR-009 |
+| ADR-005 | CAB scheduling uses deferred approval plus sequential locking | Proposed historical design; superseded as target by ADR-009 |
 | ADR-006 | Change management backend contract | Accepted (F2.0 architecture) |
 | ADR-007 | Change record authority and persistence ownership | Accepted (F2.0 architecture review) |
 | ADR-008 | Multi-activity change execution plan | Accepted (F2.1.2 architecture) |
-| ADR-009 | Change authorization model | Proposed (F3.0 architecture review) |
+| ADR-009 | Change authorization model | Accepted (F3.0.1 architecture convergence) |
 
 ## Platform flow (target)
 
@@ -37,7 +37,7 @@ Developer
 
 SharePoint is **not a mandatory dependency**. Provider selection belongs behind the Change Management capability — not in the developer-facing GMUD creation experience.
 
-### Proposed F3 authorization direction
+### Accepted F3 authorization direction
 
 Per [ADR-009](./ADR-009-change-authorization-model.md), humans authorize the
 business change and execution systems consume a platform eligibility result. Azure
@@ -55,6 +55,6 @@ decision interface is a future Backstage CAB Workbench. Neither is a system of
 record; the platform authorization ledger is authoritative.
 
 ADR-001, ADR-004, and ADR-005 remain historical records of the ADO-centric POC.
-ADR-009, if accepted, supersedes their approval-authority, Teams-to-ADO decision,
+ADR-009 supersedes their approval-authority, Teams-to-ADO decision,
 and CAB-as-ADO-check directions. Technical execution safety controls may still be
 used without becoming business authorization authority.

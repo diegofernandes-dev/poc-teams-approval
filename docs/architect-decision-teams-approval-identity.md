@@ -1,6 +1,6 @@
 # Architect decision brief — Teams approval identity
 
-> Status: **historical POC decision brief — no longer active; ADR-009 is the proposed target**.
+> Status: **historical POC decision brief — no longer active; ADR-009 is the accepted target**.
 >
 > Date: 2026-08-26
 >
@@ -8,12 +8,12 @@
 >
 > Update 2026-08-26: an architecture spike was added at the end of this document. It evaluates whether the native Microsoft Azure Pipelines app for Teams removes the need for a custom approval path, and validates the delegated Teams SSO + On-Behalf-Of design. Read the spike before answering the decision below — it narrows Option B, changes what the gateway's approver matching is for, and establishes that **OBO is not required for the first proof**: a nominal Bot Framework OAuth connection reaches Azure DevOps with the user's own delegated token and no exchange code, which is what the next checkpoint (`AUTH-1`) uses.
 
-> **F3.0 update — 2026-09-01:** this document remains valid evidence about the
+> **F3.0.1 update — 2026-09-01:** this document remains valid evidence about the
 > ADO-centric Approval Gateway POC, especially the incorrect audit identity caused
-> by service credentials. It is no longer the pending target-architecture decision.
-> [ADR-009](./adr/ADR-009-change-authorization-model.md) proposes that Teams submit
+> by service credentials. It is not the target-architecture decision.
+> Accepted [ADR-009](./adr/ADR-009-change-authorization-model.md) requires Teams to submit
 > human decisions to the platform Change Management capability rather than patch an
-> Azure DevOps approval object. The current architect action is captured in
+> Azure DevOps approval object. The accepted review outcome is captured in
 > [Architect review brief — F3 change authorization](./architect-review-f3-change-authorization.md).
 
 ## Purpose

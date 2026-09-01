@@ -2,10 +2,10 @@
 
 > **Bridge repository:** `diegofernandes-dev/poc-teams-approval` — architectural handoff (this document)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal` — authoritative source code  
-> **Checkpoint:** F3.0 — Change Authorization Architecture (proposed; documentation only) · F2.2.1 implementation baseline
+> **Checkpoint:** F3.0.1 — Authorization Architecture Convergence (accepted; documentation only) · F2.2.1 implementation baseline
 > **Prior checkpoints:** F1 (frontend shell) · F1.1 (visual polish) · F1.2 (Backstage-first composition) · F1.3 (semantic UX) · F1.4 (integrity cleanup) · F2.0 (backend contract & architecture) · F2.1 (durable index + DevelopmentProvider) · F2.1.1 (idempotency recovery) · F2.1.2 (execution plan domain, ADR-008) · F2.1.3 (frontend wiring)  
 > **UI reference:** [`gmud-create-screen.md`](../ui/gmud-create-screen.md) · [`gmud-my-changes-screen.md`](../ui/gmud-my-changes-screen.md) · [`gmud-detail-screen.md`](../ui/gmud-detail-screen.md) · Backend contract: [ADR-006](../adr/ADR-006-change-management-backend-contract.md)  
-> **Status:** F3.0 architecture documented — **NO-GO** for F3.1 planning until ADR-009 must-decide items are resolved and accepted
+> **Status:** ADR-009 accepted — **GO** for F3.1 implementation planning; **NO-GO** for implementation until a reviewed plan authorizes it
 >
 > **Note:** ADO file paths in section 3 are **implementation references** in the Azure DevOps repository, not paths in this bridge repo.
 
@@ -1465,5 +1465,137 @@ The architecture proposal was published in bridge commit `7c050a7`. The active
 summarizes the decision, invariants, nine mandatory product/governance decisions,
 deferred scope, and NO-GO gate. The older Teams-to-ADO identity brief is explicitly
 retained as historical POC evidence rather than an active implementation choice.
+
+---
+
+## 19. GMUD F3.0.1 — Authorization Architecture Convergence
+
+**Checkpoint:** Architecture and documentation only. No application code, ADO
+implementation, database migration, route, frontend component, Teams integration,
+CAB UI, pipeline enforcement, or real ITSM provider was created or modified.
+
+### Baseline verification
+
+- ADO implementation remained on branch `feat/ado-repo-governance` at `6e28611`
+- Bridge branch: `main`
+- `git fetch origin main` completed before edits
+- Bridge `HEAD == origin/main == FETCH_HEAD == 6398d28` before edits
+- Existing untracked `.vscode/` was preserved
+
+### Architecture corrections
+
+1. Removed `authorized` from Change lifecycle. `AUTHORIZED` now exists only in
+   derived `AuthorizationEvaluation`; lifecycle and authorization may legitimately
+   diverge.
+2. Added derived `GovernanceEvaluation` over mandatory post-execution requirements
+   with `NOT_APPLICABLE`, `PENDING`, `COMPLIANT`, and `NON_COMPLIANT`. Retrospective
+   rejection or SLA breach creates non-compliance evidence without invalidating a
+   historically authorized execution.
+
+### Final state model
+
+| Dimension | Values | Authority/derivation |
+|---|---|---|
+| Change lifecycle | `submitted`, `executing`, `completed`, `rejected`, `cancelled` | Projection rebuilt from accepted lifecycle evidence; never contains `authorized` |
+| Authorization | `PENDING`, `AUTHORIZED`, `REJECTED` | Derived from mandatory pre-execution requirements in the current round |
+| Governance | `NOT_APPLICABLE`, `PENDING`, `COMPLIANT`, `NON_COMPLIANT` | Derived from mandatory post-execution requirements and snapshotted SLA policy |
+| Execution eligibility | `ALLOW`, `DENY` with reasons | Point-in-time runtime result; never a lifecycle status |
+
+Canonical facts include immutable round snapshots, policy/selector provenance,
+requirements, principal snapshots, decisions, and append-only audit/lifecycle
+evidence. Read-oriented lifecycle/evaluation values may be materialized only as
+rebuildable projections.
+
+An eligibility `ALLOW` does not start execution. Only an accepted governed
+execution-start event moves the lifecycle to `executing`; accepted completion
+evidence moves it to `completed`. Completed means execution completed and may
+coexist with governance `PENDING`.
+
+### Resolved product/governance decisions
+
+| Area | F3 MVP decision |
+|---|---|
+| Normal low | One configured mandatory pre-execution approval |
+| Normal medium/high | Configured primary approval plus CAB pre-execution approval |
+| Emergency | Distinct configured A/B human decision actors pre-execution plus mandatory non-blocking CAB retrospective |
+| Additional requirements | Dedicated backend permission; before/as submission; additive only; users or configured authorities; immutable after submission |
+| Rejection/resubmission | Same `changeId`, next monotonic round, new immutable Change/policy/principal snapshot; prior round preserved |
+| Current round | Greatest valid server-issued round number; no mutable current flag |
+| Cancellation | Before start: requester/owner/governance-admin; after start: governance-admin only; blocks new execution, not running work |
+| CAB | One collective authority decision recorded by one currently authorized actor with complete attestation evidence |
+| Retrospective SLA | Rule/version/anchor snapshotted; deadline derived from server completion time; rejection or miss = `NON_COMPLIANT` |
+| Permissions | Participant read, audit read, decide, CAB record, add requirement, cancel, policy admin, governance read-all are separate |
+| Policy publication | Platform/DevOps authors/operates, governance approves, immutable version published; existing rounds never re-evaluate mutable current config |
+
+No corporate title, e-mail address, current employee name, ADO approval ID, Teams
+identity, or ITSM identifier is canonical authorization semantics. Selector overlap
+for emergency A/B fails submission closed; F3.1 has no exception mechanism.
+
+### Model C authority
+
+Platform Change Management owns policy/selector versions, authorization rounds,
+requirements, principal snapshots, decisions, derived authorization/governance,
+accepted lifecycle evidence needed for eligibility, and eligibility audit. The
+configured ITSM provider continues to own full operational GMUD detail,
+attachments, and provider workflow. ITSM/ADO/Teams/Backstage copies are
+non-authoritative projections or interaction context. The authorization ledger
+remains adjacent to the canonical index and does not replace
+`IChangeManagementProvider`.
+
+### F3.1 planning boundary
+
+**Authorization Ledger Foundation** may plan:
+
+- round/requirement/principal-snapshot/decision/audit persistence;
+- deterministic published policy configuration and selector resolution;
+- submission-time round generation, additive-requirement authorization,
+  emergency separation-of-duty validation, and new-round domain semantics;
+- server-authoritative idempotent decision commands;
+- pure authorization/governance evaluators;
+- permission-filtered Change-detail authorization representation and separated
+  backend permission enforcement.
+
+Explicitly excluded: Teams, CAB Workbench, ADO enforcement, public execution-check
+transport, execution lifecycle integration, automatic SLA/escalation jobs, real
+ITSM providers, generic DSL/BPM, break-glass, post-submission requirement changes,
+reversal, abstention, expiry, and technical stop-execution behavior.
+
+### Bridge files changed
+
+| Path | Change |
+|---|---|
+| `docs/adr/ADR-009-change-authorization-model.md` | Accepted converged architecture, resolved policy/governance decisions, four-dimensional state model, 32 review answers, F3.1 boundary |
+| `docs/architect-review-f3-change-authorization.md` | Replaced nine unresolved decisions with accepted outcomes, deferred implementation choices, and planning gate |
+| `docs/backstage/current-state.md` | Separates F2.2.1 implemented, F3 accepted architecture, and F3.1 not implemented |
+| `docs/backstage/implementation-progress.md` | This F3.0.1 checkpoint |
+| `docs/adr/README.md` | ADR-009 accepted status and current target flow |
+| `docs/adr/ADR-001-azure-devops-approval-authority.md` | Historical ADO authority explicitly superseded |
+| `docs/adr/ADR-002-backstage-change-onramp.md` | Accepted platform authorization boundary; historical ADO wording labeled |
+| `docs/adr/ADR-004-teams-delegated-approval-identity.md` | Historical Teams-to-ADO target explicitly superseded |
+| `docs/adr/ADR-005-cab-scheduling-and-concurrency.md` | Historical CAB-as-ADO-check target explicitly superseded |
+| `docs/adr/ADR-007-change-record-authority.md` | Model C authority table aligned to accepted ADR-009 |
+| `docs/architect-decision-teams-approval-identity.md` | Historical Teams POC brief points to accepted ADR-009 target |
+| `docs/ui/gmud-create-screen.md` | Accepted-but-not-implemented F3 policy note; current UI wording remains informational |
+
+### ADR status and gate
+
+ADR-009 status is **Accepted**. The two conceptual corrections and all nine
+must-decide items are resolved sufficiently for the next planning checkpoint.
+
+**GO for F3.1 implementation planning.**
+
+**NO-GO for F3.1 implementation** until a reviewed implementation plan explicitly
+authorizes code, migrations, routes, or integration work.
+
+### Deviations and remaining questions
+
+No architecture-scope deviation. ADO remains unchanged at `6e28611`.
+
+No remaining question blocks F3.1 planning. Literal permission names, persistence
+and transport shapes, configuration module layout, release mechanics, retention,
+and error codes remain implementation-planning decisions. SLA duration remains
+policy configuration. Channel UX/authentication, enforcement, provider projection,
+escalation automation, advanced CAB semantics, and break-glass remain later-slice
+questions.
 
 ---

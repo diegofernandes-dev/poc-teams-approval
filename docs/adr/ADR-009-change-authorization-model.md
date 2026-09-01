@@ -1,477 +1,379 @@
 # ADR-009 — Change authorization model
 
-- Status: Proposed — F3.0 architecture review required before F3.1 planning
+- Status: Accepted — F3.0.1 architecture convergence
 - Date: 2026-09-01
 - Related: [ADR-002](./ADR-002-backstage-change-onramp.md), [ADR-003](./ADR-003-provider-agnostic-change-management.md), [ADR-006](./ADR-006-change-management-backend-contract.md), [ADR-007](./ADR-007-change-record-authority.md), [ADR-008](./ADR-008-multi-activity-change-execution-plan.md)
 - Review packet: [Architect review brief — F3 change authorization](../architect-review-f3-change-authorization.md)
 
 ## Context
 
-The current operational flow asks Platform/DevOps to approve a production pipeline after the organizational change process has already authorized the change. That second human click is a bottleneck, not an independent governance decision.
+The current operational flow asks Platform/DevOps to approve a production pipeline after the organizational change process has already authorized the change. That second click is a bottleneck, not an independent governance decision.
 
-F2 established a provider-neutral `Change`, Model C (platform canonical index plus provider operational record), durable identity/idempotency, multi-activity execution plans, and participant read policy. F3 must add authorization without redesigning those foundations and without making Azure DevOps, Teams, Backstage UI, or an ITSM provider a second or sole approval authority.
+F2 established a provider-neutral `Change`, Model C (platform canonical index plus provider operational record), durable identity/idempotency, multi-activity execution plans, and participant read policy. F3 adds an authorization architecture without making Azure DevOps, Teams, the Backstage UI, or an ITSM provider a second or sole approval authority.
 
 The target principle is:
 
-> Humans authorize the business change. The platform enforces whether an execution is allowed.
+> Humans authorize the business change. The platform proves whether an execution is allowed.
 
-Authorization and execution eligibility are related but different facts. A fully approved change is authorized even outside its execution window; it is executable only when all runtime constraints also pass.
+Authorization, execution eligibility, execution lifecycle, and post-execution governance are related but orthogonal. A change may be authorized while its execution window is closed, and an execution may be completed while retrospective governance remains pending.
 
 This ADR is architecture only. It introduces no route, schema, provider, Teams card, CAB screen, pipeline check, or application code.
 
 ## Decision
 
-The Change Management capability will own a provider-neutral **authorization instance** for each submitted authorization round. A versioned policy evaluates an immutable change snapshot, produces effective approval requirements, resolves and snapshots the required principals, and accepts append-only human/governance decisions.
+The Change Management capability owns a provider-neutral authorization ledger. For every submitted authorization round, an immutable published policy evaluates an immutable Change snapshot, produces effective requirements, resolves the required principals, and accepts append-only decisions.
 
-The platform derives two separate results:
+The architecture exposes four distinct concepts:
 
-1. **Authorization evaluation** — whether every mandatory pre-execution requirement in the current round has a valid approval and none has been rejected.
-2. **Execution eligibility** — whether an already authorized change may execute now, for the target and context presented by an execution system.
+| Dimension | Values | Meaning |
+|---|---|---|
+| Change lifecycle | `submitted`, `executing`, `completed`, `rejected`, `cancelled` | Business/execution milestone derived from accepted lifecycle events |
+| Authorization evaluation | `PENDING`, `AUTHORIZED`, `REJECTED` | Derived result over mandatory pre-execution requirements in the current round |
+| Governance evaluation | `NOT_APPLICABLE`, `PENDING`, `COMPLIANT`, `NON_COMPLIANT` | Derived result over mandatory post-execution requirements and their SLA |
+| Execution eligibility | `ALLOW`, `DENY` with reasons | Point-in-time runtime decision for a claimed execution |
 
-Azure DevOps and other execution systems will eventually consume execution eligibility. They do not own the approval state. Teams and Backstage are interaction surfaces. They do not own decisions.
+`authorized` is not a Change lifecycle value. `AUTHORIZED` belongs only to `AuthorizationEvaluation` and is never an independently mutable Change status.
 
 ```text
-submitted Change snapshot
-        |
-        v
-versioned AuthorizationPolicy
-        |
-        v
-AuthorizationInstance / round
-  +-- effective ApprovalRequirements
-  +-- resolved principal snapshots
-  +-- append-only ApprovalDecisions
-        |
-        v
-AuthorizationEvaluation
-        |
-        +-- authorized business fact
-        |
-        v
-ExecutionEligibility(changeId, targetRef, now, context)
-        |
-        +-- ALLOW
-        +-- DENY with stable reason(s)
+Change submitted
+  -> immutable policy version + selector configuration
+  -> AuthorizationRound
+       -> effective requirements
+       -> principal snapshots
+       -> append-only decisions
+  -> AuthorizationEvaluation
+  -> ExecutionEligibility at request time
+  -> accepted execution-start evidence
+  -> executing
+  -> accepted execution-completion evidence
+  -> completed
+  -> GovernanceEvaluation may still be PENDING
 ```
 
-## Domain model
+## Facts, events, evaluations, and projections
 
-The names below describe semantics and boundaries. They do not freeze a TypeScript or persistence shape.
+### Canonical persisted facts
 
-### AuthorizationPolicy
+The platform persists the minimum immutable evidence required to reproduce authorization, governance, and execution-eligibility outcomes:
 
-An `AuthorizationPolicy` is an immutable, versioned platform definition that derives authorization requirements from a submitted Change snapshot.
+- the Change identity and immutable snapshot evaluated by each round;
+- round identity and monotonic round number;
+- policy key/version, matched-rule provenance, and input fingerprint;
+- immutable effective requirements and their source;
+- selector key/version, resolved principal or authority ref, resolution time, and provenance;
+- snapshotted post-execution SLA rule/version and anchor semantics;
+- accepted decisions and actor-authorization evidence;
+- append-only lifecycle, authorization, governance, and eligibility audit events.
 
-It has, conceptually:
+All critical timestamps are server-controlled UTC.
 
-- a stable policy key and immutable version;
-- applicability criteria over provider-neutral Change characteristics such as classification, risk, primary/activity targets, system characteristics, and approved governance metadata;
-- rules that produce requirement kinds, phases, selectors, and any separation-of-duty constraint;
-- provenance sufficient to explain which rules produced each requirement.
+### Append-only events
 
-F3 starts with deterministic application policy expressed as reviewed code/configuration. A generic rules DSL is not justified. Every material policy change creates a new immutable version; it never rewrites a version already used by a submitted change.
+The audit stream records Change submission, round creation, policy selection, selector resolution, additional requirements, decisions, rejection, resubmission, cancellation, authorization reached, execution-eligibility checks, accepted execution start, accepted execution completion, post-execution decisions, and compliance/non-compliance milestones.
 
-### AuthorizationInstance and authorization round
+Events and accepted decisions are never destructively updated. Idempotent replay of the same command may return its original result; a conflicting command is rejected.
 
-An `AuthorizationInstance` binds one Change to one historically stable authorization round. It contains or references:
+### Derived evaluations
 
-- `changeId` and an authorization-round identity;
-- the immutable policy key/version and policy input snapshot/fingerprint;
-- effective requirements and resolved-principal evidence;
-- append-only decisions;
-- derived evaluation results and milestone audit records.
+`AuthorizationEvaluation`, `GovernanceEvaluation`, `ExecutionEligibility`, and current-round selection are deterministic derivations. They are not independently editable facts.
 
-Requirements are not edited or replaced inside a round. If amendment/resubmission is later supported, it creates a new round, regenerates requirements, and preserves the prior round. Whether that round remains under the same `changeId` or creates a successor Change is a product decision required before F3.1.
+### Materialized projections
 
-### Effective ApprovalRequirement
+Implementations may materialize the current lifecycle and evaluations for query performance. A projection must be rebuildable from canonical facts and events and cannot become a competing authority. Provider, Backstage, Teams, and Azure DevOps copies are projections only.
 
-An effective `ApprovalRequirement` states **what authorization is required**. It is not a decision and not a workflow task.
+## Change lifecycle
 
-Each requirement has stable identity within its round and captures these semantics:
-
-| Concern | Semantics |
-|---|---|
-| Kind | `individual`, `authority`, or `cab` for F3; the kind defines who may record the decision, not a UI |
-| Phase | `pre_execution` or `post_execution` |
-| Mandatory | Effective requirements in F3 are mandatory; an optional reviewer is a notification, not an approval requirement |
-| Source | `policy` with rule provenance, or `additional` with actor/time/reason provenance |
-| Selector snapshot | The configured selector identity plus its resolved platform principal snapshot |
-| Creation | Server timestamp and authorization round |
-| Constraints | Only narrowly required constraints, such as distinct decision actors for two emergency requirements |
-
-“Optional additional mandatory approver” means adding the requirement is optional before submission; once added, satisfying it is mandatory. A mandatory post-execution requirement is mandatory for governance completion but does not block emergency execution.
-
-F3 does not generalize phases into arbitrary workflow nodes. New phases require a later architecture decision.
-
-### ApproverSelector and ResolvedPrincipalSnapshot
-
-An `ApproverSelector` is versioned policy/configuration intent, not a corporate title or person embedded in the Change domain. Examples are a stable selector key resolving to a user, a Catalog group, or a governance authority.
-
-At submission:
-
-1. policy selects configured selectors;
-2. a provider-neutral principal resolver resolves them to platform entity references;
-3. the authorization instance snapshots the selector key/version, resolved principal ref(s), resolution time, and resolution provenance;
-4. decisions later target the snapshotted requirement, not the current selector configuration.
-
-For an individual requirement, resolution identifies a user principal such as `user:default/alice`. For an authority or CAB requirement, resolution identifies the authority principal such as `group:default/change-authority`; it does not expand the group into N individual requirements.
-
-Group membership may change after submission. The required authority remains the snapshotted group ref. At decision time the platform verifies that the actor is then authorized to act for that authority and snapshots the actor's relevant authorization evidence with the decision. If a snapshotted principal is deleted or can no longer act, the requirement does not silently resolve to a replacement; governance must use an explicit exception/resubmission path.
-
-Names, e-mail addresses, current employees, and corporate job titles are never canonical authorization semantics. Display labels may be resolved for UI only.
-
-### ApprovalDecision
-
-An `ApprovalDecision` is an immutable human/governance fact attached to exactly one requirement in one authorization round.
-
-It records:
-
-- `approved` or `rejected`;
-- the stable requirement and round identities;
-- the platform principal who made or recorded the decision;
-- server-controlled decision time;
-- comment/reason (required for rejection);
-- decision-channel and request correlation as audit context, without making the channel authoritative;
-- the evidence used to confirm the actor was eligible for the snapshotted principal/authority;
-- CAB meeting/reference metadata when applicable.
-
-F3 has only `approved` and `rejected`. `abstained` is equivalent to no decision for authorization. `cancelled` is a Change lifecycle action, not a decision. Approval expiry is deferred; the execution window expiring changes eligibility, not historical approval.
-
-Accepted decisions are append-only and terminal for the requirement in that round. They are never overwritten. A correction requires a new authorization round or an explicit future reversal model; it must not update the old row. Replayed delivery of the same command may be idempotent, but cannot create conflicting accepted decisions.
-
-### AuthorizationEvaluation
-
-`AuthorizationEvaluation` is a deterministic derivation over the current round, not an independently editable status.
+The lifecycle contains only:
 
 ```text
-cancelled Change                         -> CANCELLED
+submitted --accepted execution start--> executing
+executing --accepted completion-------> completed
+submitted --mandatory pre rejection---> rejected
+submitted/executing --accepted cancellation--> cancelled
+rejected --accepted resubmission------> submitted  (same changeId, new round)
+```
+
+- `submitted` means a current submission exists; it says nothing about approval progress.
+- `executing` begins only when a governed executor submits an accepted execution-start/evidence event. Merely checking and receiving `ALLOW` does not start execution.
+- `completed` means actual execution completed. It never means authorization completed or CAB approved.
+- `rejected` records rejection of the submitted round. It is terminal for that round, but the Change may be resubmitted under the same `changeId` with a new round.
+- `cancelled` prevents new execution eligibility. It does not erase prior authorization or terminate an already-running technical process.
+
+No `waiting_window`, `waiting_manager`, `waiting_cab`, or `cab_approved` lifecycle values are introduced. An implementation may preserve later technical completion evidence after a cancellation without pretending that cancellation stopped the process.
+
+## Authorization policy and publication
+
+`AuthorizationPolicy` is deterministic reviewed application code/configuration, not a generic rules engine, DSL, BPM engine, or workflow engine.
+
+Platform/DevOps authors and operates the policy/configuration. The designated governance authority reviews and approves publication. Publication creates an immutable version:
+
+```text
+draft/config change
+  -> governance review
+  -> publish immutable policy and selector versions
+  -> new rounds use the new published version
+```
+
+A policy has a stable key such as `default-change-authorization` and an immutable version such as `2026-09-01.1`. Published versions are never edited or reused for materially different content. Existing rounds remain bound to their recorded versions; a mutable “current policy” is never consulted to reinterpret history.
+
+## Selectors and principal snapshots
+
+Selectors are configuration identities such as `normal-primary-approver`, `emergency-approver-a`, `emergency-approver-b`, and `cab-authority`. Corporate titles, current employee names, and e-mail addresses are not canonical semantics.
+
+At submission, the resolver snapshots:
+
+- selector key and immutable version;
+- resolved platform user or authority/group ref;
+- server-controlled `resolvedAt`;
+- resolver/configuration provenance.
+
+For an individual requirement, the snapshot names a platform user. For a group/authority requirement, it retains the group/authority ref rather than expanding it to N required individuals. At decision time the authenticated actor must currently be authorized to act for that authority, and the decision snapshots the actual actor, authority, and authorization evidence.
+
+If a selector cannot resolve, resolves to an ineligible principal, or violates separation of duty, submission fails closed. Later configuration changes do not alter existing rounds.
+
+## Approval requirements and decisions
+
+An effective `ApprovalRequirement` records stable round-local identity, kind (`individual`, `authority`, or `cab`), phase (`pre_execution` or `post_execution`), mandatory status, source/provenance, selector/principal snapshot, creation time, and applicable constraints.
+
+An `ApprovalDecision` is an append-only `approved` or `rejected` fact for exactly one requirement and round. It records actor, authority where applicable, server UTC time, comment/reason, channel/correlation context, authorization evidence, and CAB meeting/reference where applicable. Rejection requires a reason.
+
+A requirement accepts one terminal decision per round. Exact replay is idempotent; a conflicting second decision is rejected. F3 MVP has no reversal, abstention, decision expiry, or destructive repair.
+
+## AuthorizationEvaluation
+
+Authorization is derived over mandatory `pre_execution` requirements in the current round:
+
+```text
 any rejected mandatory pre requirement -> REJECTED
 any undecided mandatory pre requirement -> PENDING
 all mandatory pre requirements approved -> AUTHORIZED
 ```
 
-Only decisions made by an eligible actor against an active requirement in the current round are valid input. Post-execution requirements are deliberately excluded from the pre-execution authorization predicate.
+Post-execution requirements do not participate. Cancellation also does not rewrite historical authorization; lifecycle and eligibility enforce cancellation separately.
 
-The business meaning of **authorized** is:
+`AUTHORIZED` means every mandatory pre-execution decision required by the snapshotted round is approved. It does not mean the window is active, the target matches, execution started, execution succeeded, or governance is complete.
 
-> The submitted change, as snapshotted and evaluated under its recorded policy version, has every mandatory pre-execution governance decision required for that authorization round.
+## Authorization rounds and resubmission
 
-Authorization does not mean the window is active, the requested target matches, capacity is available, execution succeeded, or the change is complete.
+Exactly one round is current for future execution eligibility:
 
-A valid rejection of any mandatory pre-execution requirement makes the round rejected and moves the Change to terminal `rejected`. No later approval can repair that round. Resubmission, if offered, requires a fresh round and policy evaluation.
+- server-issued `roundNumber` values increase monotonically per `changeId`;
+- a new round may be created only after the prior round is terminal;
+- the current round is the valid round with the greatest `roundNumber`;
+- no mutable `isCurrent` flag or destructive update is required.
 
-### ExecutionEligibility
+A rejected requirement makes that round terminal `REJECTED`; later approval cannot repair it. Correcting and resubmitting the Change retains the same `changeId`, creates a new immutable Change snapshot, applies the currently published policy version, resolves new principal snapshots, and creates new requirements and decisions. All prior evidence remains immutable.
 
-`ExecutionEligibility` is a point-in-time, provider-neutral evaluation made for an execution request. It is not an approval and not a durable Change status.
-
-Conceptually:
-
-```text
-executableNow =
-  change exists
-  AND current authorization round is AUTHORIZED
-  AND Change lifecycle permits further execution
-  AND server time is inside the approved execution window
-  AND requested target/context correlates to the governed Change
-  AND no cancellation or policy/security hold blocks execution
-```
-
-The requested execution window is treated as half-open `[startsAtUtc, endsAtUtc)`: executable at the start instant and no longer executable at the end instant.
-
-The business meaning of **executable now** is:
-
-> The platform can prove that this authorized change may perform this claimed execution against this governed target at the evaluation instant.
-
-An eligibility result records the evaluation time, authorization round/evidence reference, outcome, and reasons. Example denial categories are change absent, not authorized, window inactive, cancelled/terminal lifecycle, or target mismatch. Exact public codes and transport are deferred to the enforcement contract design.
-
-## Minimal lifecycle and orthogonal approval progress
-
-The minimal target Change lifecycle is:
+Example:
 
 ```text
-submitted --all pre requirements approved--> authorized
-authorized --first accepted execution------> executing
-executing ----------------------------------> completed
-
-submitted --mandatory pre rejection--------> rejected
-submitted/authorized/executing --cancel----> cancelled
+CHG-42
+  R1: P1 approved, CAB rejected -> REJECTED
+  corrected and resubmitted
+  R2: new snapshot, policy provenance, principals, requirements, decisions -> PENDING
 ```
 
-`submitted`, `authorized`, `executing`, `completed`, `rejected`, and `cancelled` are sufficient conceptual states. F3.1 must decide which execution transitions it actually implements; F3.0 adds none.
+A fundamentally different business change receives a new Change and `changeId`.
 
-Approval progress remains orthogonal:
+## Normal-change policy baseline
 
-| Change lifecycle | Example authorization progress |
+The F3 MVP policy baseline is configuration, not hardcoded lifecycle behavior:
+
+| Classification/risk | Mandatory pre-execution requirements |
 |---|---|
-| `submitted` | 1 of 2 pre-execution requirements approved |
-| `authorized` | all mandatory pre-execution requirements approved; window may still be closed |
-| `executing` | authorization remains historically true; one or more activities are underway |
-| `completed` | execution ended; a mandatory post-execution CAB review may still be pending |
-| `rejected` | current round has a rejected mandatory pre-execution requirement |
-| `cancelled` | no new execution is allowed; prior decisions remain auditable |
+| Normal + low | One configured primary approval |
+| Normal + medium | One configured primary approval + CAB |
+| Normal + high | One configured primary approval + CAB |
 
-There are no statuses such as `waiting_manager`, `waiting_cab`, `cab_approved`, or `waiting_window`. Execution activity status remains outside this ADR and ADR-008 is not redesigned.
+For normal low risk, approval of the primary requirement yields `AUTHORIZED`; a closed window still yields execution `DENY`, and an open valid window/context may yield `ALLOW`.
 
-Cancellation is append-only and never deletes decisions. It blocks new eligibility immediately but cannot undo an execution already in flight. Detailed cancellation permissions and whether cancellation is allowed after execution begins must be decided before F3.1.
+For normal medium/high, one approval with CAB pending remains `PENDING`; both approved yields `AUTHORIZED`.
 
-## Illustrative flows, not hardcoded policy
+## Emergency policy baseline
 
-### Normal, low risk
+Emergency requires:
 
-```text
-normal + low-risk Change submitted
-  -> policy normal-low/vN
-  -> one mandatory pre-execution individual/authority requirement
-  -> eligible actor approves
-  -> AUTHORIZED
-  -> window inactive: DENY / window not active
-  -> window active + target matches: ALLOW
-```
+- pre-execution Approver A;
+- pre-execution Approver B;
+- mandatory post-execution CAB retrospective.
 
-### Normal, CAB-required
+A and B are generic configured selectors and must produce distinct human decision actors in the same round. Resolution to the same effective person fails submission closed. F3.1 has no exception mechanism.
 
-```text
-normal Change submitted
-  -> policy version determines CAB is required
-  -> mandatory pre-execution individual/authority requirement
-  -> mandatory pre-execution CAB requirement
-  -> both approved: AUTHORIZED
-  -> runtime window and target checks determine executableNow
-```
+When A and B approve, authorization is `AUTHORIZED`. The retrospective does not block emergency execution. After accepted start and completion, governance remains `PENDING` until the retrospective is approved, rejected, or misses its SLA.
 
-Risk/classification mappings above are examples. The exact normal-change policy must be approved before F3.1 and must live in versioned policy, not hardcoded workflow statuses.
+## Additional mandatory requirements
 
-### Emergency
+Additional requirements may be proposed before or as part of submission only by an actor authorized through a dedicated backend-enforced capability such as `change.authorization.requirement.add`.
 
-```text
-emergency Change submitted
-  -> mandatory pre-execution Approver A requirement
-  -> mandatory pre-execution Approver B requirement
-  -> mandatory post-execution CAB retrospective requirement
-  -> A and B approve (distinct actors if policy requires)
-  -> AUTHORIZED; retrospective CAB is still pending
-  -> window + target checks pass: ALLOW
-  -> execution completes
-  -> CAB retrospective approved/rejected and audited afterward
-```
+They may resolve to platform users or configured authorities/groups and are additive only. They cannot remove, replace, downgrade, waive, or make optional a policy-generated requirement. Once the Change is submitted, the active round and its effective requirements are immutable. An approver cannot dynamically add another approver in F3 MVP.
 
-The selectors named A and B are generic policy keys. Their resolved principal snapshots carry the actual platform principals. No title or current organizational hierarchy enters the domain.
+Example: policy produces `P1` and `P2`, and an authorized submission adds `A1`; all three must approve. `A1` cannot replace either policy requirement.
 
-A post-execution CAB decision never retroactively makes the emergency execution unauthorized. A rejection or missed retrospective creates a visible governance exception/non-compliance outcome and follow-up obligation; its SLA and escalation path must be decided before emergency implementation.
+## Cancellation
 
-### Additional mandatory approver
+Before execution begins, requester, Change owner, or governance/admin authority may cancel, subject to server-side authorization. After execution begins, requester alone cannot cancel; governance/admin authority is required.
+
+Cancellation is append-only, blocks all new execution eligibility, and preserves prior decisions and evidence. It means “cancel future execution,” not “stop an already-running technical deployment.” A technical stop mechanism is deferred.
+
+## CAB semantics
+
+CAB is one collective governance authority, represented by a configured authority principal such as `group:default/cab-authority`. One authenticated actor currently authorized to act for that authority records the collective `approved` or `rejected` decision.
+
+The decision captures the outcome, actual recorder, authority, server time, notes, meeting/reference when available, and evidence that the recorder could act for the authority. CAB does not require one click per participant by default; quorum, attendance, voting, or individual signatures are supporting evidence or a later specialized policy.
+
+## GovernanceEvaluation
+
+Governance is derived only from mandatory `post_execution` requirements:
 
 ```text
-policy result
-  +-- requirement P1 (policy, pre_execution, mandatory)
-  +-- requirement P2 (policy, pre_execution, mandatory)
-
-authorized additional selector supplied at/before submission
-  +-- requirement A1 (additional, pre_execution, mandatory,
-                       addedBy + addedAt + reason)
-
-effective set = P1 + P2 + A1
-AUTHORIZED only when P1, P2, and A1 are approved
+no mandatory post requirements                         -> NOT_APPLICABLE
+any mandatory post requirement undecided within SLA    -> PENDING
+all mandatory post requirements approved               -> COMPLIANT
+any mandatory post requirement rejected                -> NON_COMPLIANT
+any mandatory post requirement past its SLA undecided  -> NON_COMPLIANT
 ```
 
-Additional requirements are additive only. They cannot remove, replace, downgrade, waive, or make optional a policy-generated requirement.
+At round creation, the requirement snapshots the SLA policy key/version, duration or rule, and anchor semantics. For the emergency retrospective, the anchor is the server-controlled execution-completion event; the deadline is deterministically derived from that timestamp. The exact duration remains published configuration, not a domain constant.
 
-Because the current product persists no draft and creates a Change as `submitted`, the F3.1-safe initial rule is:
+A rejected or overdue retrospective creates audit evidence, a governance exception, and a future follow-up/escalation obligation. It never retroactively changes a valid historical execution to unauthorized. Escalation automation is deferred.
 
-- additional selectors may be proposed before/as part of submission by an actor with an explicit permission;
-- the backend validates that permission and resolves them together with policy requirements;
-- after submission, no requirement may be added, removed, or replaced in the active round;
-- an approver cannot add another approver in F3.1;
-- additional requirements may target individuals or authorities/groups when allowed by policy.
+## Execution eligibility and execution evidence
 
-A future additive post-submission change would require a new round, explicit audit, and immediate loss of executable eligibility until the new effective set is approved. It must not mutate the current round silently.
-
-## CAB decision semantics
-
-CAB is one collective governance requirement, not N individual approval requirements by default.
-
-A CAB requirement resolves to a snapshotted governance authority. One authenticated CAB operator/chair/delegate who is authorized to act for that authority records `approved` or `rejected`. Audit captures the collective outcome, recorder, decision time, notes, actor authorization evidence, and optional meeting reference.
-
-This model does not assert that the recorder alone made the decision; it asserts that the authorized recorder attested the collective decision. If a regulator requires named attendance, quorum, votes, or individual signatures, those are supporting CAB evidence or a later specialized policy—not an automatic expansion of every CAB into N clicks.
-
-## Channel and UX boundaries
-
-### Teams
-
-Teams is a future notification and individual-decision interaction adapter:
+`AUTHORIZED` is not “executable now.” A runtime eligibility check uses server time and requires:
 
 ```text
-ApprovalRequirement
-  -> notification/interaction adapter
-  -> Teams
-  -> authenticated ApprovalDecision command
-  -> Change Management capability
+Change exists
+AND current AuthorizationEvaluation = AUTHORIZED
+AND lifecycle permits a new execution
+AND no cancellation/security/policy hold applies
+AND server time is inside [startsAtUtc, endsAtUtc)
+AND target/context correlates to the governed Change
 ```
 
-Teams does not store authoritative requirement or decision state. Card payloads are untrusted correlation data. The Change Management capability authenticates the actor, re-reads the requirement, authorizes the actor against the snapshotted principal, accepts the command, and records the decision. Teams may be a good channel for individual or exceptional approvals; this ADR does not design a card or delegated-auth implementation.
+The result is `ALLOW` or `DENY` with stable reasons, evaluation time, and authorization evidence reference. It is audited but is never persisted as Change lifecycle. `ALLOW` does not mean execution started; a separate accepted execution-start/evidence boundary is required. Final transport, authentication, replay protection, target correlation, and reason-code vocabulary are deferred.
 
-### Backstage CAB Workbench
+## Permission boundaries
 
-The preferred CAB interface is a future Backstage governance workspace, because CAB decisions require queue and cross-change context rather than isolated mobile buttons.
+Participant visibility remains requester, `ownerRef` team, any activity `responsibleRef` team, or `platform_admin`. That is read participation only.
 
-Its future read/query model should assemble:
+The backend separately authorizes these capabilities:
 
-- CAB-pending and post-execution-review requirements;
-- classification, risk, requested window, primary/activity targets, and affected system;
-- execution plan, rollback, evidence, and provider-authoritative operational detail;
-- related/overlapping changes and execution windows;
-- effective requirements, decision history, and current authorization outcome.
-
-The workbench may record a CAB decision through the same platform command boundary. Backstage UI itself is not the authority; the Change Management authorization ledger is. Teams may notify CAB members and deep-link to this workspace.
-
-## Future execution-enforcement boundary
-
-An execution system will present a provider-neutral request conceptually containing:
-
-| Input | Meaning |
+| Capability | Meaning |
 |---|---|
-| `changeId` | Stable business-change identity |
-| `targetRef` | Governed target the caller claims it will affect |
-| `executionKind` | Optional provider-neutral category needed for matching policy |
-| request context | Authenticated caller and correlation metadata; provider-specific details remain outside canonical Change |
+| Participant read | Read a Change due to participation |
+| Authorization audit read | Read requirements, decisions, and actor evidence |
+| Individual decision | Decide a requirement resolved to the actor |
+| CAB record | Attest a collective CAB decision for an authority |
+| Add requirement | Add an allowed mandatory requirement at/before submission |
+| Cancel Change | Cancel under the lifecycle rules above |
+| Policy administration | Author/review/publish policy and selector configuration |
+| Governance read-all | Enterprise/auditor visibility across Changes |
 
-The platform uses server time, not a caller-provided timestamp, for eligibility. A caller timestamp may be retained only as audit context.
-
-The response conceptually contains `ALLOW` or `DENY`, evaluation time, stable reason(s), and an authorization-evidence reference/digest. Exact HTTP shape, authentication, replay protection, target matching rules, and reason codes are deferred until the enforcement slice.
-
-No canonical Change field contains `pipelineId`, `buildId`, `environmentId`, `approvalId`, or an ITSM-specific key. Adapter telemetry may record such values as execution-request context without turning them into business authorization identity.
+Exact literal permission strings may be refined during F3.1 planning. The conceptual separation is mandatory. Participant read, `ownerRef`, and `responsibleRef` never automatically imply decision authority; the frontend never decides authorization itself.
 
 ## Model C authority implications
 
-ADR-007 Model C remains, with one bounded refinement: **the platform Change Management capability is authoritative for authorization evidence required to make platform execution decisions.** This does not make Backstage the enterprise ITSM database and does not make the platform authoritative for all operational GMUD detail.
+Model C remains a hybrid, not a platform-owned monolithic Change repository:
 
-| Data | Authority under F3 target | Placement |
+| Data | Canonical authority | Placement |
 |---|---|---|
-| Policy definitions and versions | Platform Change Management | Versioned platform policy store/config |
-| Authorization round identity/provenance | Platform Change Management | Canonical index linkage plus authorization ledger |
-| Effective requirements | Platform Change Management | Platform authorization ledger keyed by `changeId` |
-| Resolved principal snapshots | Platform Change Management | Platform authorization ledger |
-| Approval decisions and actor evidence | Platform Change Management | Append-only platform authorization ledger |
-| Authorization evaluation/milestones | Platform Change Management | Derived projection plus append-only audit |
-| Execution eligibility evaluations | Platform Change Management | Runtime result plus audit record |
-| Canonical change identity/routing/snapshot | Platform | Existing canonical index per ADR-007 |
-| Full operational GMUD record, attachments, provider workflow detail | Configured ITSM provider in production | Provider record behind adapter |
-| Provider copy of requirements/decisions | Optional projection only | Never authorization authority |
+| Change identity, routing, creation snapshot | Platform | Canonical index |
+| Policy and selector definitions/versions | Platform Change Management | Reviewed immutable application configuration |
+| Authorization rounds and provenance | Platform Change Management | Authorization ledger linked by `changeId` |
+| Requirements and principal snapshots | Platform Change Management | Authorization ledger |
+| Decisions and actor evidence | Platform Change Management | Append-only authorization ledger |
+| Accepted lifecycle milestones needed for eligibility | Platform Change Management | Append-only evidence/audit ledger |
+| Authorization and governance evaluations | Platform Change Management | Derived/rebuildable projections |
+| Execution-eligibility evaluations | Platform Change Management | Runtime result plus audit |
+| Full operational GMUD detail, attachments, provider workflow | Configured ITSM provider | Provider record behind `IChangeManagementProvider` |
+| ITSM/ADO/Teams/Backstage copies | Projection or interaction context | Never canonical authorization state |
 
-The authorization ledger is adjacent to and linked from the canonical index; it is not a monolithic replacement for `IChangeManagementProvider`. Future detail/CAB queries compose provider-authoritative operational content with platform-authoritative authorization content.
+Provider detail and platform authorization reads are composed. The ledger remains adjacent to the canonical index and does not replace `IChangeManagementProvider`. Azure DevOps is an optional future execution consumer/enforcer; its approval objects are not canonical. Teams and Backstage are interaction surfaces, never authorities.
 
-Provider replacement therefore preserves the authorization instance and audit history without translating provider approval objects. Historical operational detail still follows ADR-007's immutable `providerKey` routing/migration rules.
+This ADR supersedes ADR-001's target statement that Azure DevOps is the approval authority and ADR-007's former approval-authority row. The historical ADO-centric decisions remain documented as POC history.
 
-An external provider outage may limit operational detail, but it must not cause the platform to invent approval state. Whether an execution eligibility check can proceed from the complete platform snapshot during provider outage is a fail-closed policy decision to make in the enforcement slice.
+## Audit requirements
 
-Upon acceptance, this ADR supersedes ADR-001's statement that Azure DevOps is the canonical approval authority and ADR-007's corresponding authority-table row. Azure DevOps may continue to enforce technical protections during migration, but its Environment approval object is not canonical business authorization state.
+An auditor must be able to reconstruct, in order: submission; policy version and input; round; requirements; selector resolution; additional requirements; every decision; rejection; resubmission; cancellation; authorization reached; eligibility checks; execution start; execution completion; post-execution governance; CAB retrospective; and compliance/non-compliance.
 
-## Audit model
+Audit uses stable principal refs and server-controlled UTC timestamps. Provider/channel identifiers are context only. Sensitive comments/evidence require retention and access controls to be defined during implementation planning.
 
-F3 uses an append-only authorization/audit ledger plus current projections. It does not require event sourcing of the entire Change aggregate.
+## F3.1 planning boundary — Authorization Ledger Foundation
 
-An auditor must be able to reconstruct, in order:
+F3.1 implementation planning may include:
 
-1. Change submission and immutable policy input snapshot/fingerprint;
-2. policy key/version and matched rules;
-3. generated requirements and their source;
-4. configured selectors and resolved principal snapshots;
-5. additional requirement actor, time, permission outcome, and reason;
-6. every accepted decision, actor, server time, comment, channel, and actor-eligibility evidence;
-7. rejection, cancellation, authorization-reached, and lifecycle milestone records;
-8. later execution eligibility checks, request target/context, result, and reasons;
-9. post-execution CAB outcome or unresolved governance obligation.
+- authorization rounds, requirements, selector/principal snapshots, append-only decisions, and audit persistence;
+- deterministic published policy/configuration and selector-resolution boundaries;
+- submission-time first-round generation, authorized additive requirements, emergency separation-of-duty validation, and new-round domain semantics;
+- a server-authoritative decision command boundary with idempotent replay and conflicting-decision rejection;
+- pure AuthorizationEvaluation and GovernanceEvaluation functions;
+- permission-filtered authorization/governance representation composed into Change detail;
+- permission definitions/enforcement for audit read, decide, CAB record, add requirement, policy administration, governance read-all, and cancellation.
 
-Records use UTC server timestamps and stable platform principal refs. Provider and channel identifiers are audit context only. Sensitive comments/evidence require retention and access controls; those controls are implementation planning concerns. Audit records are never destructively rewritten when policy, organization, provider, or display names change.
+F3.1 explicitly excludes Teams, CAB Workbench, Azure DevOps enforcement, public execution-check transport, execution lifecycle integration, automatic SLA/escalation jobs, real ITSM providers, generic DSL/BPM, break-glass, post-submission requirement mutation, decision reversal, abstention, expiry, and technical stop-execution behavior.
 
-## Exception ownership
-
-Platform/DevOps owns policy, control implementation, integration reliability, observability, and exceptions such as correlation failure, security exceptions, platform outage, invalid authorization evidence, and governed break-glass. It does not approve individual happy-path production changes.
-
-Break-glass is not an implied bypass in this model. It requires a separately approved policy, strong audit, limited principals, reason/evidence, and retrospective review before implementation.
-
-## Consequences
-
-- Positive: the same business authorization can govern ADO pipelines and future execution systems without coupling the Change domain to either.
-- Positive: submitted requirements remain historically stable across policy, organization, channel, and provider changes.
-- Positive: individual approval UX and CAB governance UX can evolve independently while sharing one authority.
-- Positive: post-execution emergency governance is supported without pretending it blocks prior execution.
-- Positive: DevOps leaves the normal per-deployment approval chain and focuses on platform policy and exceptions.
-- Trade-off: Model C gains a bounded platform-owned authorization ledger and composed reads.
-- Trade-off: policy/principal resolution availability becomes part of submission reliability; failures must fail closed.
-- Trade-off: provider projections can lag and must be labeled non-authoritative.
-- Trade-off: cancellation, resubmission, and exception permissions require explicit product decisions before implementation.
+The governance evaluator may be implemented and tested against supplied canonical timestamps without adding an execution integration or background timer.
 
 ## Rejected alternatives
 
 | Alternative | Decision and rationale |
 |---|---|
-| DevOps remains final pipeline approver | Rejected — duplicates an already-made governance decision and preserves the bottleneck |
-| Teams moves DevOps's Approve button to mobile | Rejected — changes the button location, not the authority or unnecessary human step |
-| Hardcoded manager → CAB → DevOps workflow | Rejected — policy varies by classification/risk and DevOps is not a normal approver |
-| Corporate-role-specific domain fields | Rejected — titles, names, and hierarchy change; versioned selectors resolve to platform principals |
-| N individual CAB approvals | Rejected as default — CAB is one collective authority decision; quorum/voting is a specialized future requirement |
-| External ITSM provider is sole authorization authority | Rejected — provider replacement/outage would undermine platform execution checks and historical portability |
-| Azure DevOps Environment approval is canonical | Rejected — binds business authorization to one execution product/object |
-| Dozens of workflow-specific Change statuses | Rejected — requirement/decision progress is orthogonal to the small lifecycle |
-| Fully generic BPM/workflow engine | Rejected — pre/post authorization phases do not justify arbitrary process orchestration |
-| Rules engine/DSL from day one | Rejected — deterministic versioned application policy is smaller, testable, and evolvable |
+| DevOps final happy-path approval | Rejected — duplicates an already-made governance decision |
+| Teams as relocated DevOps button | Rejected — changes the channel, not the authority or bottleneck |
+| Hardcoded manager → CAB → DevOps workflow | Rejected — policy varies and DevOps is not a regular approver |
+| Corporate-role-specific domain fields | Rejected — selectors resolve to provider-neutral principals |
+| N CAB clicks by default | Rejected — CAB is one collective authority decision |
+| Azure DevOps as authorization authority | Rejected — binds business authorization to one execution product |
+| ITSM provider as sole authorization authority | Rejected — undermines platform enforcement and portability |
+| Workflow-specific status explosion | Rejected — lifecycle, authorization, governance, and eligibility are orthogonal |
+| Generic BPM engine | Rejected — the bounded model does not require arbitrary workflow orchestration |
+| Policy DSL on day one | Rejected — deterministic reviewed configuration is smaller and testable |
 
-## Open decisions
+## Deferred implementation decisions
 
-### Must decide before F3.1 planning
+No remaining decision blocks F3.1 planning. Planning must still choose literal permission names, persistence and transport shapes, configuration file/module layout, operational policy release mechanics, retention controls, and detailed error codes. Later slices own Teams authentication/cards, CAB Workbench UX, execution enforcement, target correlation, SLA escalation automation, ITSM projections, quorum/voting, advanced decisions, break-glass, and activity lifecycle.
 
-1. Exact normal and emergency policy matrix by classification/risk/target, including when CAB is required.
-2. Policy storage/version publication process and the governed selector catalog/resolver configuration.
-3. Which principals/permissions may propose additional mandatory requirements at submission.
-4. Rejection amendment/resubmission product semantics: a new round under the same `changeId` or a successor Change.
-5. Cancellation permissions, allowed lifecycle points, and effect on already-started execution.
-6. CAB recorder/delegate authorization and minimum collective-decision evidence.
-7. Emergency retrospective CAB SLA, escalation, and the meaning of a rejected/missed retrospective.
-8. Whether emergency Approver A/B must always be distinct and how overlapping resolved selectors fail validation.
-9. Authorization read/decision permissions, including auditor and governance-wide visibility.
-
-### Can defer
-
-- Teams Adaptive Card design and delegated/channel authentication mechanics.
-- CAB Workbench visual design, pagination, overlap algorithm, and meeting integration.
-- Public pipeline-check transport, ADO adapter, execution caller authentication, replay protection, and final denial-code vocabulary.
-- Detailed target-correlation rules and execution-kind vocabulary.
-- SharePoint/Jira/ServiceNow projections and synchronization behavior.
-- `abstained`, decision cancellation/reversal, or approval-expiry states.
-- Quorum/vote/attendance modeling beyond the single CAB authority decision.
-- Generic policy DSL, BPMN/workflow engine, and arbitrary phases.
-- Break-glass implementation and activity-level execution lifecycle.
+The exact retrospective SLA duration is intentionally a published policy value, not an open domain decision.
 
 ## Required architecture review answers
 
 | # | Question | Answer |
 |---|---|---|
-| 1 | Business meaning of authorized | All mandatory pre-execution requirements in the snapshotted current round have valid approvals under the recorded policy version |
-| 2 | Business meaning of executable now | The authorized change also passes lifecycle, server-time window, target-correlation, and hold checks for this request |
-| 3 | Approval progress vs Change lifecycle | Separate; progress lives in requirements/decisions, with only meaningful lifecycle milestones on Change |
-| 4 | What generates requirements | A deterministic, versioned platform policy evaluated at submission, plus authorized additive requirements |
-| 5 | Can additional mandatory approvers be added | Yes, at/before submission in the initial design by explicitly authorized actors |
-| 6 | Can they remove policy requirements | No; additions can never weaken policy output |
-| 7 | Are job titles/names encoded | No; selectors resolve to provider-neutral principal refs |
-| 8 | How approvers are snapshotted | Selector key/version, resolved principal ref(s), time, and provenance are frozen in the authorization instance |
-| 9 | Organization config changes later | Existing rounds keep their snapshots; new submissions use the new configuration |
-| 10 | Emergency vs normal | Policy may require multiple generic pre-execution approvers plus post-execution CAB; exact mappings remain configurable |
-| 11 | Can post-execution CAB avoid blocking emergency execution | Yes; it gates governance completion/follow-up, not pre-execution authorization |
-| 12 | CAB one decision or N clicks | One collective authority decision by default, recorded by an authorized operator/delegate |
-| 13 | Is Teams system of record | No; it is a notification/interaction adapter |
-| 14 | Is Backstage the future CAB workspace | Yes, preferred UI; the backend authorization ledger remains authoritative |
-| 15 | Does DevOps remain in happy-path approvals | No; DevOps owns policy, controls, reliability, and exceptions |
-| 16 | Does Azure DevOps own authorization | No; it is a future execution consumer/enforcer |
-| 17 | Future pipeline contract | Provider-neutral `ExecutionRequest` (`changeId`, `targetRef`, optional execution kind/context) → `ALLOW`/`DENY` with reasons/evidence ref |
-| 18 | Model C owner of requirements/decisions | Platform Change Management authorization ledger |
-| 19 | Can authorization survive ITSM replacement | Yes; it is platform-owned and provider-neutral |
-| 20 | Must decide before F3.1 | The nine product/governance decisions listed above |
-| 21 | Can defer | Channels/UI, provider adapters, final enforcement transport, advanced decision/workflow semantics |
-| 22 | Ready for F3.1 implementation planning | **NO-GO** until the must-decide list is resolved and this ADR is accepted |
+| 1 | Does Change.lifecycle still contain `authorized`? | No. It contains `submitted`, `executing`, `completed`, `rejected`, and `cancelled`. |
+| 2 | Where does AUTHORIZED now live? | Only in derived `AuthorizationEvaluation`. |
+| 3 | Can authorization and lifecycle diverge legitimately? | Yes; for example lifecycle `submitted`, authorization `AUTHORIZED`, window closed. |
+| 4 | What does `completed` mean? | Actual execution completion evidenced by an accepted completion event. |
+| 5 | Can completed have pending post-execution governance? | Yes. |
+| 6 | What is GovernanceEvaluation? | A deterministic derivation over mandatory post-execution requirements and their SLA. |
+| 7 | What states does GovernanceEvaluation have? | `NOT_APPLICABLE`, `PENDING`, `COMPLIANT`, `NON_COMPLIANT`. |
+| 8 | Does retrospective CAB block emergency execution? | No. |
+| 9 | What happens if retrospective CAB rejects? | Governance becomes `NON_COMPLIANT`; prior valid execution remains authorized-at-time-of-execution. |
+| 10 | What happens if its SLA is missed? | Governance becomes `NON_COMPLIANT`; exception/follow-up evidence is recorded. |
+| 11 | Are emergency Approver A/B required to be distinct? | Yes, as distinct human decision actors in the same round; overlap fails closed. |
+| 12 | Are corporate titles present in canonical semantics? | No. |
+| 13 | How are normal low-risk changes authorized? | One configured mandatory pre-execution approval. |
+| 14 | How are normal medium/high changes authorized? | One configured mandatory pre-execution approval plus CAB pre-execution approval. |
+| 15 | Can additional mandatory approvers weaken policy? | No; they are additive only. |
+| 16 | Who may add them? | Only an actor granted the dedicated server-enforced capability. |
+| 17 | Can requirements change after submission? | No; the active round is immutable. |
+| 18 | What happens after rejection? | The round is terminal; correction/resubmission creates a new round and preserves history. |
+| 19 | Same changeId or successor Change? | Same `changeId`; a fundamentally different business change gets a new Change. |
+| 20 | Who may cancel before execution? | Requester, Change owner, or governance/admin authority, server-authorized. |
+| 21 | What changes after execution begins? | Requester alone cannot cancel; governance/admin is required, and cancellation cannot stop the running process. |
+| 22 | Who records CAB decisions? | One authenticated actor currently authorized to act for the snapshotted CAB authority. |
+| 23 | Is CAB one collective decision? | Yes, by default. |
+| 24 | Are participant-read and approval permissions separate? | Yes. |
+| 25 | What owns authorization evidence under Model C? | Platform Change Management's authorization ledger. |
+| 26 | Is ADO canonical approval authority? | No. |
+| 27 | Is Teams canonical? | No. |
+| 28 | Is Backstage UI canonical? | No. |
+| 29 | Is ADR-009 now Accepted? | Yes. |
+| 30 | Is architecture ready for F3.1 planning? | Yes — GO for implementation planning. |
+| 31 | What belongs in F3.1? | The Authorization Ledger Foundation listed above. |
+| 32 | What remains out of F3.1? | Channels/UI, enforcement, execution integration, escalation automation, real providers, generic workflow/policy engines, break-glass, and advanced decision semantics. |
 
 ## Gate
 
-The F3.0 architecture is ready for stakeholder review. It is **NO-GO for F3.1 implementation planning** until the “Must decide” items are resolved and this ADR changes from Proposed to Accepted.
+ADR-009 is **Accepted**. The architecture is **GO for F3.1 implementation planning**.
 
-Do not implement F3.1, Teams, CAB UI, pipeline enforcement, or a real ITSM provider from this checkpoint.
+This does not authorize F3.1 implementation. Do not implement production code, migrations, routes, Teams, CAB UI, Azure DevOps enforcement, or a real ITSM provider from this checkpoint.

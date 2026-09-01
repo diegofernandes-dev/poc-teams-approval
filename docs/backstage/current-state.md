@@ -4,7 +4,7 @@
 > **Canonical architectural branch:** `main` (branch `docs/architecture-decisions-mvp` superseded as of F1.4)  
 > **Implementation repository (ADO):** `platform-devops-developer-portal`  
 > **Active branch:** `feat/ado-repo-governance`  
-> **Last updated:** 2026-09-01 (F3.0 — Change Authorization Architecture, proposed)
+> **Last updated:** 2026-09-01 (F3.0.1 — Authorization Architecture Convergence, accepted; no implementation)
 
 ## Stack
 
@@ -85,12 +85,20 @@
 | List vs. detail authority (F2.2) | List = index snapshot (discovery only); detail = provider-authoritative, unchanged routing |
 | Read visibility (F2.2.1) | **Change participant** policy — `platform_admin` OR requester OR `ownerRef` team OR any activity `responsibleRef` team; read only, no other authority; supersedes ADR-008's F2.1.2 "responsibleRef grants no read access" clause |
 
-### F3.0 proposed authorization architecture (documentation only)
+### Architecture and implementation status
 
-[ADR-009](../adr/ADR-009-change-authorization-model.md) defines the proposed target
+| Slice | Status |
+|---|---|
+| F2.2.1 implementation | **IMPLEMENTED** at ADO `6e28611` |
+| F3 authorization architecture | **ACCEPTED** by ADR-009 at F3.0.1 |
+| F3.1 Authorization Ledger Foundation | **NOT IMPLEMENTED**; eligible for implementation planning only |
+
+### F3.0.1 accepted authorization architecture (documentation only)
+
+[ADR-009](../adr/ADR-009-change-authorization-model.md) defines the accepted target
 without changing the F2.2.1 implementation:
 
-| Concern | Proposed decision |
+| Concern | Accepted decision |
 |---|---|
 | Business authorization authority | Platform Change Management authorization ledger, not Azure DevOps or an ITSM provider |
 | Policy | Deterministic, immutable, versioned policy evaluated at submission |
@@ -99,31 +107,33 @@ without changing the F2.2.1 implementation:
 | Principal identity | Configured selectors resolved to snapshotted platform principal refs; no titles/names in domain |
 | CAB | One collective authority decision by default; recorded by an authorized operator/delegate |
 | Emergency | Multiple generic pre-execution approvals plus post-execution CAB retrospective |
-| Authorization vs execution | Authorization = governance complete; executable now additionally requires lifecycle, window, target correlation, and no hold |
+| Orthogonal state | Lifecycle excludes `authorized`; `AUTHORIZED` is derived pre-execution authorization; post-execution governance has its own evaluation |
+| Lifecycle | `submitted`, `executing`, `completed`, `rejected`, `cancelled`; start/completion require accepted execution evidence |
+| Governance | `NOT_APPLICABLE`, `PENDING`, `COMPLIANT`, `NON_COMPLIANT`; retrospective rejection/SLA miss never rewrites historical authorization |
+| Authorization vs execution | Authorization is pre-execution governance; executable now additionally requires lifecycle, window, target correlation, and no hold |
 | Teams | Future individual-decision interaction channel; never system of record |
 | Backstage | Preferred future CAB Workbench UI; backend authorization ledger remains authoritative |
 | Pipelines | Future provider-neutral execution-eligibility consumers; no ADO object in canonical Change |
 | DevOps | Policy/control/integration/observability/exception owner; absent from happy-path per-deploy approval |
 | Model C | Retained; bounded platform authorization ledger sits beside the index while provider owns operational GMUD detail |
 
-**Gate:** architecture is ready for stakeholder review through the active
-[F3 architect review brief](../architect-review-f3-change-authorization.md), but
-remains **NO-GO for F3.1 implementation planning** until ADR-009's nine must-decide
-product/governance items are resolved and the ADR is accepted. No application code,
-route, migration, Teams, CAB UI, pipeline enforcement, or real provider was
-introduced in F3.0.
+**Gate:** the [F3 architect review brief](../architect-review-f3-change-authorization.md)
+records all nine decisions as resolved and ADR-009 as Accepted. The result is **GO
+for F3.1 implementation planning** and **NO-GO for F3.1 implementation** until a
+reviewed implementation plan authorizes it. No application code, route, migration,
+Teams, CAB UI, pipeline enforcement, or real provider was introduced in F3.0.1.
 
-See [`implementation-progress.md`](./implementation-progress.md) §12–§18 for full checkpoint detail (F2.1, F2.1.1, F2.1.2, F2.1.3, F2.2, F2.2.1, F3.0 architecture).
+See [`implementation-progress.md`](./implementation-progress.md) §12–§19 for full checkpoint detail (F2.1 through F3.0.1 architecture convergence).
 
 ### Normative references
 
 - UI contracts: [`gmud-create-screen.md`](../ui/gmud-create-screen.md) · [`gmud-my-changes-screen.md`](../ui/gmud-my-changes-screen.md) · [`gmud-detail-screen.md`](../ui/gmud-detail-screen.md)
-- Architecture decisions: [`docs/adr/`](../adr/README.md) (ADR-001 through ADR-008 on `main`)
+- Architecture decisions: [`docs/adr/`](../adr/README.md) (ADR-001 through ADR-009 on `main`)
 - Backend contract: [ADR-006](../adr/ADR-006-change-management-backend-contract.md)
 - Record authority: [ADR-007](../adr/ADR-007-change-record-authority.md)
 - Execution plan domain: [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md)
-- Authorization model: [ADR-009](../adr/ADR-009-change-authorization-model.md) — proposed F3.0 architecture; no implementation
-- Handoff detail: [`implementation-progress.md`](./implementation-progress.md) §9–§18
+- Authorization model: [ADR-009](../adr/ADR-009-change-authorization-model.md) — accepted F3.0.1 architecture; no implementation
+- Handoff detail: [`implementation-progress.md`](./implementation-progress.md) §9–§19
 
 ### Visual baseline
 
@@ -245,4 +255,5 @@ See [`implementation-progress.md`](./implementation-progress.md) §14 for checkp
 | F2.2 "STOP before F3" gate | **Passed** — F2.2.1 proceeded as the next slice (authorization hardening, not F3) |
 | ADR-008 "responsibleRef grants no read access" (F2.1.2) | Superseded for read visibility by ADR-006 "Participant read scope (F2.2.1)" — decision text preserved as historical record |
 | F2.2.1 "STOP before F3" gate | **Passed for architecture-only F3.0** — no implementation authorization was granted |
-| F3.0 architecture-only gate | **Active** — ADR-009 proposed; NO-GO for F3.1 planning until must-decide items are resolved and stakeholder acceptance is recorded |
+| F3.0 architecture-only gate | **Passed by F3.0.1** — historical proposal/review checkpoint |
+| F3.0.1 architecture convergence gate | **GO for F3.1 implementation planning; NO-GO for implementation** — ADR-009 accepted, no authorization code exists |

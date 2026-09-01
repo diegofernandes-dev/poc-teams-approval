@@ -2,7 +2,7 @@
 
 > Status: **normative UI reference — F2.1.3 create flow implemented**
 >
-> Related ADRs: [ADR-002](../adr/ADR-002-backstage-change-onramp.md) · [ADR-003](../adr/ADR-003-provider-agnostic-change-management.md) · [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md) · [ADR-009](../adr/ADR-009-change-authorization-model.md) (proposed F3.0 target)
+> Related ADRs: [ADR-002](../adr/ADR-002-backstage-change-onramp.md) · [ADR-003](../adr/ADR-003-provider-agnostic-change-management.md) · [ADR-008](../adr/ADR-008-multi-activity-change-execution-plan.md) · [ADR-009](../adr/ADR-009-change-authorization-model.md) (accepted F3 architecture; not implemented)
 >
 > Visual reference: [`gmud-create-reference.jpg`](./gmud-create-reference.jpg) (composition authority; F1.3+ supersedes deployment-centric labels)
 
@@ -210,12 +210,12 @@ Do **not** mention Teams, Adaptive Cards, Azure DevOps, CAB scheduling implement
 
 The Catalog **Responsável** field is ownership context only — it must not be equated with the managerial approver described in step 1. Approver resolution is a later architecture concern; not implemented in F1.4.
 
-**F3.0 architecture note:** the three steps and “gestor” wording above remain the
-implemented informational baseline, not canonical policy. ADR-009 proposes
+**F3 architecture note:** the three steps and “gestor” wording above remain the
+implemented informational baseline, not canonical policy. Accepted ADR-009 defines
 versioned effective requirements resolved to provider-neutral principals. A future
 authorization UI must render those requirements and must not hardcode a manager,
-corporate title, CAB sequence, DevOps approval, or Teams channel. No UI change is
-authorized by F3.0.
+corporate title, CAB sequence, DevOps approval, or Teams channel. No UI change was
+implemented by F3.0.1.
 
 ## Right rail — Status
 

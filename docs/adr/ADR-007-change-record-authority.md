@@ -29,19 +29,17 @@ The platform is **not** building a ServiceNow/Jira-like system inside Backstage.
 | Term | Owner |
 |---|---|
 | **Domain authority** | Platform — canonical `Change` schema, validation, HTTP API contract |
-| **Record authority (production)** | Configured ITSM provider — full operational GMUD lifecycle |
+| **Record authority (production)** | Configured ITSM provider — full operational GMUD detail and provider workflow; platform eligibility uses accepted lifecycle evidence per ADR-009 |
 | **Record authority (F2.1 dev)** | `DevelopmentProvider` backed by platform DB — explicitly **non-production** |
 | **Identity authority** | Platform — `changeId` generation and idempotency |
-| **Approval authority** | Azure DevOps (where applicable) — per ADR-001; unchanged |
+| **Authorization authority** | Platform Change Management authorization ledger — per accepted ADR-009 |
 | **Execution authority** | Out of scope |
 
-> **F3.0 proposed authority refinement:** [ADR-009](./ADR-009-change-authorization-model.md)
-> assigns effective approval requirements, resolved-principal snapshots, approval
-> decisions, authorization evaluations, and execution-eligibility evidence to a
-> platform-owned authorization ledger linked to the canonical index. This bounded
-> authorization authority does not replace the provider operational record and does
-> not turn Model C into Model B. If ADR-009 is accepted, it supersedes the
-> “Approval authority = Azure DevOps” row above.
+> **Accepted F3 authority refinement:** [ADR-009](./ADR-009-change-authorization-model.md)
+> assigns authorization/governance evidence and accepted lifecycle milestones needed
+> for execution eligibility to a platform-owned ledger linked to the canonical index.
+> This bounded authority does not replace the provider operational record and does
+> not turn Model C into Model B. Azure DevOps approval objects are non-canonical.
 
 Backstage remains the developer onramp (ADR-002). It does **not** become the enterprise GMUD workflow database.
 

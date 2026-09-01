@@ -4,11 +4,11 @@
 
 Accepted for F1.3 frontend slice. F2 backend integration requires a separate architecture review gate.
 
-> **F3.0 proposed refinement:** [ADR-009](./ADR-009-change-authorization-model.md)
-> makes the platform Change Management capability—not the Backstage UI and not
-> Azure DevOps—the authority for business-change authorization evidence. Backstage
-> remains the onramp and is the preferred future CAB workspace. The historical
-> F1/F2 boundaries below describe the implementation baseline and are not rewritten.
+> **Accepted F3 refinement:** [ADR-009](./ADR-009-change-authorization-model.md)
+> makes the platform Change Management capability—not the Backstage UI, Azure
+> DevOps, or an ITSM provider—the authority for business-change authorization
+> evidence. Backstage remains the onramp and preferred future CAB workspace. Any
+> ADO approval-authority wording below describes the historical F1/F2 baseline.
 
 ## Context
 
@@ -16,7 +16,7 @@ Production change management (GMUD) in this organization spans multiple systems:
 
 - **Backstage IDP** — developer portal where engineers discover catalog entities and request production changes.
 - **Change Management capability** — platform-owned provider-neutral contract and backend (see [ADR-003](./ADR-003-provider-agnostic-change-management.md)).
-- **Azure DevOps** — source of truth for deployment approval state, approvers, authorization, environment protection, and audit where ADO protected resources are involved (see [ADR-001](./ADR-001-azure-devops-approval-authority.md)).
+- **Azure DevOps** — historical F1/F2 deployment-control authority; under ADR-009 it may enforce a platform eligibility result but is not canonical business authorization.
 - **Microsoft Teams** — approval interaction channel (Approval Gateway POC); not the change-record authority.
 
 Developers need a single, catalog-aware entry point to **request a production change** without assuming deployment-only semantics (application version, artifact, pipeline). Firewall, database, DNS, infrastructure, and manual operational changes must fit the same onramp.
@@ -38,10 +38,10 @@ Provider-specific persistence (SharePoint, Jira Service Management, ServiceNow, 
 |---|---|
 | Backstage | Change-request onramp UX, catalog context, identity-derived requester, mock/real API boundary |
 | Change Management capability | Canonical provider-neutral contract; provider adapter routing (see ADR-003) |
-| Azure DevOps | Deployment approval authority where ADO protected resources apply — not replaced by Backstage GMUD screen |
+| Azure DevOps | Historical deployment-control baseline; future optional execution consumer/enforcer, never canonical business authorization |
 | Teams | Approval interaction channel — not the GMUD creation system or change-record authority |
 
-Backstage does **not** become the approval authority. It does **not** become the GMUD record database. Provider implementations remain behind the provider abstraction defined in ADR-003.
+The Backstage UI does **not** become the authorization authority. The backend Change Management capability owns authorization evidence per ADR-009. Backstage does not become the GMUD record database, and provider implementations remain behind the provider abstraction defined in ADR-003.
 
 ## F1.3 scope (implemented)
 
@@ -76,7 +76,7 @@ After F2.0 sign-off:
 ## Related documents
 
 - Provider architecture: [ADR-003](./ADR-003-provider-agnostic-change-management.md)
-- Deployment approval authority: [ADR-001](./ADR-001-azure-devops-approval-authority.md)
+- Historical ADO approval authority: [ADR-001](./ADR-001-azure-devops-approval-authority.md) (superseded by ADR-009)
 - Normative UI contract: [`gmud-create-screen.md`](../ui/gmud-create-screen.md)
 - Implementation handoff: [`implementation-progress.md`](../backstage/implementation-progress.md)
 - Future GMUD enrichment: [`future-gmud-context-enrichment.md`](../future-gmud-context-enrichment.md)
