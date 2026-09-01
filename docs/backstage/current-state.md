@@ -123,6 +123,7 @@ See [`implementation-progress.md`](./implementation-progress.md) §14 for checkp
 | **Bridge architecture review** | **`57613ab`** (ADR-007 + §10) |
 | **Bridge F2.1 handoff** | **`196949c`** (ADO SHA `0dc3ed4` recorded) |
 | **Bridge F2.1.1 handoff** | **`a65e1ed`** · **`44729aa`** · **`afaaaf6`** (ADO SHA `ed6810b`) |
+| **Bridge F2.1.2 architecture** | **`afb154b`** (ADR-008) |
 
 ## Superseded references
 

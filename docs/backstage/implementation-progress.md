@@ -873,26 +873,45 @@ F2.1.2 extends the canonical GMUD domain with **`ExecutionPlan`** / **`Execution
 | Authorization | `responsibleRef` does **not** grant read access (F3) |
 | Index snapshot | Full immutable `executionPlan` with server `activityId`s |
 
-### ADO scope (F2.1.2)
+### ADO files changed
 
-- Domain types on `Change` and `CreateChangeHttpRequest`
-- Zod validation + catalog validation for Group/Component refs
-- Server-assigned `activityId` (UUID) at create
-- `execution_plan_json` on `change_index` snapshot
-- Idempotency hash includes `executionPlan`
-- Provider passthrough (`DevelopmentProvider` JSON record)
-- Unit/integration tests
-- **STOP:** frontend, ITSM, activity status, search
+| Path | Change |
+|---|---|
+| `types.ts` | `ExecutionPlan`, `ExecutionActivity`, `ExecutionActivityInput` types on `Change` / `CreateChangeHttpRequest` |
+| `validation.ts` | Zod schema for `executionPlan` (min 1, max 20 activities) |
+| `executionPlanValidator.ts` | Catalog validation for Group `responsibleRef`, optional Component `targetRef` |
+| `ChangeManagementService.ts` | Validate plan; assign `activityId` (UUID) at create |
+| `persistence/changeIndexMapper.ts` | `execution_plan_json` snapshot column mapping |
+| `migrations/change-management/20260901120000_add_execution_plan_to_change_index.cjs` | Index migration |
+| `testHelpers.ts` | Default `executionPlan` in `validRequest` |
+| `plugins/change-management/src/model/types.ts` | Shared GET model + optional POST `executionPlan` until F2.1.3 UI |
+| `executionPlanValidator.test.ts` | Validator unit tests (new) |
+| `ChangeManagementService.test.ts` | Persistence + idempotency conflict tests |
+
+### Tests executed (ADO)
+
+```bash
+yarn workspace backend lint                    # PASS
+yarn workspace backend test --watchAll=false   # PASS 88/88 (20 suites)
+```
 
 ### Gate
 
 | Gate | Status |
 |---|---|
 | F2.1.2 architecture | **Accepted** — ADR-008 |
-| F2.1.2 backend | **In progress** — see ADO commit below |
+| F2.1.2 backend | **Complete** (awaiting ADO commit SHA) |
 | Frontend wiring | **STOP** until F2.1.3 |
 | SharePoint/Jira/ServiceNow | **STOP** |
 
 ### Bridge commit
 
-Recorded after ADO F2.1.2 handoff (ADR-008 + doc updates on `main`).
+**`afb154b`** on branch `main` (ADR-008 + doc updates).
+
+### ADO commit
+
+Pending commit on branch `feat/ado-repo-governance` (baseline F2.1.1: `ed6810b`).
+
+```text
+feat(gmud): F2.1.2 multi-activity execution plan domain
+```
