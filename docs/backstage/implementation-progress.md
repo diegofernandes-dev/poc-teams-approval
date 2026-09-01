@@ -1253,7 +1253,7 @@ policy-agnostic).
 | Repository | Branch | SHA |
 |---|---|---|
 | ADO `platform-devops-developer-portal` | `feat/ado-repo-governance` | `6e28611` |
-| Bridge `poc-teams-approval` | `main` | `PENDING_BRIDGE_COMMIT_SHA` |
+| Bridge `poc-teams-approval` | `main` | `8990dad` |
 
 ### Cross-team fixture and results
 
