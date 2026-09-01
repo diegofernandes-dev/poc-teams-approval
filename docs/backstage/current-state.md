@@ -144,7 +144,7 @@ team-wide/enterprise search all require a separate architecture review.
 | **F2.2 commit** | **`0b9cb38`** (My Changes List + Change Detail) |
 | Bridge F2.0 handoff | `4ec7292` · `317b821` · `047dcc6` |
 | Bridge architecture review | `57613ab` (ADR-007 + §10) |
-| **Bridge F2.2 handoff** | *(this checkpoint's commit — see `implementation-progress.md` §13)* |
+| **Bridge F2.2 handoff** | **`424e615`** |
 
 ## Superseded references
 
