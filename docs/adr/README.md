@@ -17,6 +17,7 @@ The branch `docs/architecture-decisions-mvp` is **superseded by `main`** as of G
 | ADR-005 | CAB scheduling uses deferred approval plus sequential locking | Proposed / partially validated |
 | ADR-006 | Change management backend contract | Accepted (F2.0 architecture) |
 | ADR-007 | Change record authority and persistence ownership | Accepted (F2.0 architecture review) |
+| ADR-008 | Multi-activity change execution plan | Accepted (F2.1.2 architecture) |
 
 ## Platform flow (target)
 

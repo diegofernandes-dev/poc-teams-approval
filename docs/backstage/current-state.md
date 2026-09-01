@@ -83,18 +83,18 @@
 - Architecture decisions: [`docs/adr/`](../adr/README.md) (ADR-001 through ADR-008 on `main`)
 - Backend contract: [ADR-006](../adr/ADR-006-change-management-backend-contract.md)
 - Record authority: [ADR-007](../adr/ADR-007-change-record-authority.md)
-- Handoff detail: [`implementation-progress.md`](./implementation-progress.md) §9–§10
+- Handoff detail: [`implementation-progress.md`](./implementation-progress.md) §9–§14
 
 ### Visual baseline
 
 - F1.2 before baseline: [`gmud-create-f1.2-after.png`](../ui/screenshots/gmud-create-f1.2-after.png)
 - F1.3+ after capture: manual — see [`screenshots/README.md`](../ui/screenshots/README.md)
 
-## Review gate — F2.1.2 multi-activity execution plan checkpoint
+## Review gate — F2.1.2 multi-activity execution plan checkpoint (passed)
 
-F2.1.2 extends the canonical domain with `ExecutionPlan` / `ExecutionActivity` (backend only). Frontend remains mock-backed.
+F2.1.2 backend delivered: `ExecutionPlan` / `ExecutionActivity` on canonical `Change`, index snapshot, catalog validation. Frontend remains mock-backed.
 
-**STOP** before frontend wiring, ITSM providers, activity status, and search.
+**STOP** before F2.1.3 frontend wiring, ITSM providers, activity status, and search.
 
 See [`implementation-progress.md`](./implementation-progress.md) §14 for checkpoint detail.
 
@@ -119,11 +119,12 @@ See [`implementation-progress.md`](./implementation-progress.md) §14 for checkp
 | **F2.0 commit** | **`b2bed17`** (backend contract scaffold) |
 | **F2.1 commit** | **`0dc3ed4`** (durable Model C backend persistence) |
 | **F2.1.1 commit** | **`ed6810b`** (idempotency recovery — see §13) |
+| **F2.1.2 commit** | **`5e4f30e`** (multi-activity execution plan — see §14) |
 | Bridge F2.0 handoff | `4ec7292` · `317b821` · `047dcc6` |
 | **Bridge architecture review** | **`57613ab`** (ADR-007 + §10) |
 | **Bridge F2.1 handoff** | **`196949c`** (ADO SHA `0dc3ed4` recorded) |
 | **Bridge F2.1.1 handoff** | **`a65e1ed`** · **`44729aa`** · **`afaaaf6`** (ADO SHA `ed6810b`) |
-| **Bridge F2.1.2 architecture** | **`afb154b`** (ADR-008) |
+| **Bridge F2.1.2 handoff** | **`afb154b`** · **`75b4f38`** (ADR-008; ADO SHA `5e4f30e` recorded below) |
 
 ## Superseded references
 

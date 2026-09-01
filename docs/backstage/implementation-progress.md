@@ -900,17 +900,33 @@ yarn workspace backend test --watchAll=false   # PASS 88/88 (20 suites)
 | Gate | Status |
 |---|---|
 | F2.1.2 architecture | **Accepted** — ADR-008 |
-| F2.1.2 backend | **Complete** (awaiting ADO commit SHA) |
+| F2.1.2 backend | **Complete** |
 | Frontend wiring | **STOP** until F2.1.3 |
 | SharePoint/Jira/ServiceNow | **STOP** |
 
+### Architecture review answers (F2.1.2)
+
+1. `executionPlan` required — **Yes** (min 1 activity)
+2. `Change.targetRef` retained — **Yes** (primary catalog anchor)
+3. `responsibleRef` = Catalog Group only — **Yes**
+4. Activity `targetRef` optional Component — **Yes**
+5. Per-activity status/workflow — **Rejected**
+6. `responsibleRef` grants read — **No** (deferred F3)
+7. Index snapshot includes full plan — **Yes**
+8. Idempotency includes plan in hash — **Yes**
+9. Frontend UI — **STOP** until F2.1.3
+
+### Deviations
+
+None — ADO implementation matches ADR-008.
+
 ### Bridge commit
 
-**`afb154b`** on branch `main` (ADR-008 + doc updates).
+**`afb154b`** · **`75b4f38`** on branch `main` (ADR-008 + handoff).
 
 ### ADO commit
 
-Pending commit on branch `feat/ado-repo-governance` (baseline F2.1.1: `ed6810b`).
+**`5e4f30e`** on branch `feat/ado-repo-governance` (baseline F2.1.1: `ed6810b`).
 
 ```text
 feat(gmud): F2.1.2 multi-activity execution plan domain
